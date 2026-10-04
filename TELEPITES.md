@@ -70,7 +70,7 @@ npx wrangler d1 execute kodkigyo --remote --command "UPDATE players SET nick = '
 ## Élesítés előtt
 
 - Az `index.html`-ben az `INFINITE_HEARTS` értékét állítsd `false`-ra.
-- A `LEGAL` beállításokban töltsd ki az üzemeltető nevét és címét (`operator`, `address`).
+- A `LEGAL` beállításokban töltsd ki az üzemeltető nevét (`operator`). A cím (`address`) elhagyható, amíg a Kódkígyó ingyenes és nem üzleti célú. Ha üzleti lesz (hirdetés, fizetős funkció), akkor kötelező; ilyenkor lakcím helyett postafiók vagy cégcím is megadható.
 - A jogi szövegeket nézesd át jogásszal.
 
 ## Költségek

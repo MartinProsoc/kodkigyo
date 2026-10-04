@@ -2681,7 +2681,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("A Kódkígyó ingyenes, oktatási célú webes alkalmazás a Python programozási nyelv tanulásához."),
         el("dl", null,
           kv("Üzemeltető", val(LEGAL.operator, "üzemeltető neve")),
-          kv("Cím", val(LEGAL.address, "lakcím vagy székhely")),
+          LEGAL.address ? kv("Cím", LEGAL.address) : null,
           kv("E-mail", contact()),
           LEGAL.phone ? kv("Telefon", LEGAL.phone) : null,
           LEGAL.registry ? kv("Nyilvántartási adatok", LEGAL.registry) : null,
