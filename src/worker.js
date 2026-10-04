@@ -337,6 +337,8 @@ async function report(p, req, env) {
 async function deleteAccount(p, env) {
   await handOver(p, env, null);
   await env.DB.batch([
+    // A még futó heti csoportjában felszabadul a helye.
+    env.DB.prepare("UPDATE league_groups SET size = size - 1 WHERE done_at IS NULL AND size > 0 AND id IN (SELECT grp FROM weekly WHERE player_id = ? AND grp IS NOT NULL)").bind(p.id),
     env.DB.prepare("DELETE FROM follows WHERE follower = ?1 OR followee = ?1").bind(p.id),
     env.DB.prepare("DELETE FROM weekly WHERE player_id = ?").bind(p.id),
     env.DB.prepare("DELETE FROM progress WHERE player_id = ?").bind(p.id),
