@@ -6,12 +6,14 @@
   // A kodkigyo.html-t a build lépés másolja a public/ mappába index.html néven.
   "build": { "command": "node scripts/prepare.mjs" },
   "assets": { "directory": "./public", "binding": "ASSETS" },
+  // Ne legyen minden verziónak külön nyilvános címe, csak az éles oldal.
+  "preview_urls": false,
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "kodkigyo",
-      // Ide írd be a `npx wrangler d1 create kodkigyo --jurisdiction=eu` által kiírt azonosítót.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // EU-s joghatósággal létrehozott adatbázis (npx wrangler d1 create kodkigyo --jurisdiction=eu).
+      "database_id": "b6fcbe54-e772-4786-a0b3-0f797df83a5e",
       "migrations_dir": "migrations"
     }
   ],
