@@ -1,0 +1,14 @@
+{
+  "name": "kodkigyo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply kodkigyo --local",
+    "db:remote": "wrangler d1 migrations apply kodkigyo --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.147.0"
+  }
+}

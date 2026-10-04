@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kodkigyo",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-10-01",
+  // A kodkigyo.html-t a build lépés másolja a public/ mappába index.html néven.
+  "build": { "command": "node scripts/prepare.mjs" },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kodkigyo",
+      // Ide írd be a `npx wrangler d1 create kodkigyo --jurisdiction=eu` által kiírt azonosítót.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Óránként lezárja a véget ért heteket az osztályligákban, és törli a lejárt adatokat.
+  "triggers": { "crons": ["7 * * * *"] }
+  // Saját domainhez (miután a kodkigyo.hu a Cloudflare-en van), vedd ki a megjegyzésből:
+  // , "routes": [{ "pattern": "kodkigyo.hu", "custom_domain": true }]
+}
