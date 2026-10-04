@@ -46,7 +46,7 @@ Ettől kezdve minden `main` ágra feltöltött commit után a Cloudflare magát�
 
 ## Frissítés
 
-Ha a `index.html` vagy a `src/worker.js` változik, elég feltölteni a GitHubra. Ha új fájl kerül a `migrations/` mappába, előtte futtasd a gépedről: `npm run db:remote`.
+Ha a `index.html` vagy a `src/worker.js` változik, elég feltölteni a GitHubra. Ha új fájl kerül a `migrations/` mappába, **a Push előtt** futtasd a gépedről: `npm run db:remote`. Különben az új szerverkód a hiányzó táblák miatt hibát ad, amíg az adatbázis nem frissül.
 
 ## Helyi kipróbálás
 
