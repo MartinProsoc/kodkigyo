@@ -7,6 +7,8 @@ const LEAGUE_MAX = 9;
 const MAX_BODY = 300000;
 const DAY = 86400000;
 const WEEKLY_CAP = 5000;
+const GROUP_SIZE = 30;
+const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
 const REPORT_REASONS = ["nick", "other"];
 // Durva szavak a becenevekhez (ékezet nélkül, kisbetűvel; a számokat betűvé alakítva is ellenőrizzük).
 const BAD_WORDS = ["fasz", "geci", "kurva", "picsa", "pina", "buzi", "ribanc", "kocsog", "bazd", "baszd", "fuck", "shit", "bitch", "cunt", "nigg", "hitler", "porn"];
@@ -131,13 +133,21 @@ async function register(req, env) {
 
 async function social(p, env) {
   const wk = weekKey(Date.now());
+  // Ha a múlt heti csoportját az óránkénti zárás még nem érte el, most lezárjuk, hogy friss legyen a ligája.
+  const prev = await env.DB.prepare("SELECT grp FROM weekly WHERE player_id = ? AND week_key = ? AND grp IS NOT NULL").bind(p.id, addDays(wk, -7)).first();
+  if (prev && (await closeGroup(env, prev.grp))) p = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(p.id).first();
   const rows = (sql, ...args) => env.DB.prepare(sql).bind(...args).all().then((r) => r.results || []);
   const withWeek = "SELECT p.*, COALESCE(w.xp, 0) AS wxp FROM players p LEFT JOIN weekly w ON w.player_id = p.id AND w.week_key = ?1";
   const [following, followers, mine] = await Promise.all([
     rows(withWeek + " JOIN follows f ON f.followee = p.id WHERE f.follower = ?2 LIMIT 200", wk, p.id),
     rows(withWeek + " JOIN follows f ON f.follower = p.id WHERE f.followee = ?2 LIMIT 500", wk, p.id),
-    env.DB.prepare("SELECT xp FROM weekly WHERE player_id = ? AND week_key = ?").bind(p.id, wk).first(),
+    env.DB.prepare("SELECT xp, grp, league FROM weekly WHERE player_id = ? AND week_key = ?").bind(p.id, wk).first(),
   ]);
+  let league = { tier: p.league, grouped: false, members: [] };
+  if (mine && mine.grp) {
+    const members = await rows("SELECT p.*, w.xp AS wxp FROM weekly w JOIN players p ON p.id = w.player_id WHERE w.grp = ?1 LIMIT 40", mine.grp);
+    league = { tier: mine.league, grouped: true, members: members.map((m) => publicProfile(m, m.wxp, wk)) };
+  }
   let cls = null;
   if (p.class_id) {
     const c = await env.DB.prepare("SELECT * FROM classes WHERE id = ?").bind(p.class_id).first();
@@ -154,6 +164,7 @@ async function social(p, env) {
     following: following.map((r) => publicProfile(r, r.wxp, wk)),
     followers: followers.map((r) => publicProfile(r, r.wxp, wk)),
     class: cls,
+    league,
   });
 }
 
@@ -171,8 +182,7 @@ async function putMe(p, req, env) {
     sets.push("xp = ?", "streak = ?", "best_streak = ?", "last_day = ?", "lessons = ?", "ach = ?", "skin = ?", "stats_at = ?", "seeded = 1");
     binds.push(Math.max(xp, 0), int(s.streak, 5000), int(s.bestStreak, 5000), isDay(s.lastDay) ? s.lastDay : p.last_day,
       int(s.lessons, 500), int(s.ach, 1000), SKINS.includes(s.skin) ? s.skin : "classic", now);
-    // Osztály nélkül a liga a gépi ellenfelek elleni eredményből jön; osztályban a szerver dönt.
-    if (!p.class_id && Number.isInteger(s.league)) { sets.push("league = ?"); binds.push(Math.max(0, Math.min(LEAGUE_MAX, s.league))); }
+    // A ligát mindig a szerver dönti el a heti zárásnál, az app által küldött értéket nem vesszük át.
     const wk = weekKey(now), prev = addDays(wk, -7);
     const weeks = [];
     if (s.weekKey === wk || s.weekKey === prev) weeks.push([s.weekKey, int(s.weekXp, WEEKLY_CAP)]);
@@ -190,7 +200,8 @@ async function putMe(p, req, env) {
   sets.push("updated_at = ?");
   binds.push(now);
   await env.DB.prepare(`UPDATE players SET ${sets.join(", ")} WHERE id = ?`).bind(...binds, p.id).run();
-  return json({ ok: true });
+  const grouped = s && typeof s === "object" ? await ensureGroup(env, p.id, weekKey(now)) : false;
+  return json({ ok: true, grouped });
 }
 
 async function getProgress(p, env) {
@@ -200,11 +211,26 @@ async function getProgress(p, env) {
   try { data = JSON.parse(row.data); } catch {}
   return json({ data, updatedAt: row.updated_at });
 }
+// Ugyanaz a szabály, mint az appban (remoteWins): a haladás törlése új korszakot kezd, az nyer;
+// különben a több XP. Így egy másik eszköz kevesebb haladással nem írhatja felül a mentést.
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+function moreProgress(a, b) {
+  if (num(a.epoch) !== num(b.epoch)) return num(a.epoch) > num(b.epoch);
+  return num(a.xp) > num(b.xp);
+}
 async function putProgress(p, req, env) {
   const b = await readJson(req);
   if (!b.data || typeof b.data !== "object") throw new HttpError(400, "Hibás mentés.");
   const text = JSON.stringify(b.data);
   if (text.length > 250000) throw new HttpError(413, "Túl nagy mentés.");
+  const row = await env.DB.prepare("SELECT data, updated_at FROM progress WHERE player_id = ?").bind(p.id).first();
+  if (row) {
+    let cur = null;
+    try { cur = JSON.parse(row.data); } catch {}
+    if (cur && moreProgress(cur, b.data)) {
+      return json({ error: "A szerveren több haladás van egy másik eszközödről.", conflict: true, data: cur, updatedAt: row.updated_at }, 409);
+    }
+  }
   const at = int(b.updatedAt, 1e13) || Date.now();
   await env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (player_id) DO UPDATE SET data = ?2, updated_at = ?3")
     .bind(p.id, text, at).run();
@@ -222,10 +248,14 @@ async function follow(p, req, env) {
     if (!target) throw new HttpError(404, "Nincs ilyen kódú játékos. Ellenőrizd a kódot!");
   } else if (b.id) {
     target = await env.DB.prepare("SELECT id, nick, class_id FROM players WHERE id = ?").bind(String(b.id)).first();
-    // Kód nélkül csak osztálytársat, vagy azt követheted vissza, aki már követ téged.
-    const classmate = target && p.class_id && target.class_id === p.class_id;
-    const followsMe = target && (await env.DB.prepare("SELECT 1 AS x FROM follows WHERE follower = ? AND followee = ?").bind(target.id, p.id).first());
-    if (!classmate && !followsMe) throw new HttpError(403, "Kód nélkül csak osztálytársat vagy a követőidet követheted.");
+    // Kód nélkül csak ligatársat (ezen a héten egy csoportban), osztálytársat, vagy azt követheted vissza, aki már követ téged.
+    if (!target) throw new HttpError(404, "Nincs ilyen játékos.");
+    const classmate = p.class_id && target.class_id === p.class_id;
+    const followsMe = await env.DB.prepare("SELECT 1 AS x FROM follows WHERE follower = ? AND followee = ?").bind(target.id, p.id).first();
+    const sameGroup = await env.DB.prepare(
+      "SELECT 1 AS x FROM weekly a JOIN weekly b ON b.grp = a.grp AND b.week_key = a.week_key WHERE a.player_id = ? AND b.player_id = ? AND a.week_key = ? AND a.grp IS NOT NULL")
+      .bind(p.id, target.id, weekKey(Date.now())).first();
+    if (!classmate && !followsMe && !sameGroup) throw new HttpError(403, "Kód nélkül csak a ligatársaidat, az osztálytársaidat vagy a követőidet követheted.");
   } else throw new HttpError(400, "Add meg a barátod kódját.");
   if (target.id === p.id) throw new HttpError(400, "Saját magadat nem követheted.");
   const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM follows WHERE follower = ?").bind(p.id).first();
@@ -315,35 +345,65 @@ async function deleteAccount(p, env) {
   ]);
 }
 
-// ---------- Heti ligazárás és takarítás (óránként fut) ----------
+// ---------- Online liga: heti csoportok és zárás ----------
+// Ugyanez a szabály van az appban is (zones), a kettőnek egyeznie kell.
 function zones(size, league) {
-  return { up: league < LEAGUE_MAX ? Math.min(3, Math.max(1, size - 1)) : 0, down: league > 0 && size >= 8 ? 3 : 0 };
+  const up = league < LEAGUE_MAX ? (size >= 15 ? 5 : Math.min(3, Math.max(1, size - 1))) : 0;
+  const down = league > 0 && size >= 8 ? (size >= 15 ? 5 : 3) : 0;
+  return { up, down };
 }
-async function closeClassWeek(env, classId, wk) {
+// Az első heti XP-vel a játékos a ligája legkorábbi, még nem teli csoportjába kerül.
+async function ensureGroup(env, playerId, wk) {
+  const row = await env.DB.prepare("SELECT xp, grp FROM weekly WHERE player_id = ? AND week_key = ?").bind(playerId, wk).first();
+  if (!row || row.xp <= 0) return false;
+  if (row.grp) return true;
+  // Előbb lezárjuk a múlt heti csoportját, hogy már a frissített ligájába kerüljön.
+  const prev = await env.DB.prepare("SELECT grp FROM weekly WHERE player_id = ? AND week_key = ? AND grp IS NOT NULL").bind(playerId, addDays(wk, -7)).first();
+  if (prev) await closeGroup(env, prev.grp);
+  const me = await env.DB.prepare("SELECT league FROM players WHERE id = ?").bind(playerId).first();
+  const league = me ? me.league : 0;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const open = await env.DB.prepare("SELECT id FROM league_groups WHERE week_key = ? AND league = ? AND size < ? ORDER BY created_at LIMIT 1").bind(wk, league, GROUP_SIZE).first();
+    const gid = open ? open.id : randomCode(8);
+    if (!open) await env.DB.prepare("INSERT INTO league_groups (id, week_key, league, size, created_at) VALUES (?, ?, ?, 0, ?)").bind(gid, wk, league, Date.now()).run();
+    const took = await env.DB.prepare("UPDATE league_groups SET size = size + 1 WHERE id = ? AND size < ?").bind(gid, GROUP_SIZE).run();
+    if (!took.meta.changes) continue;
+    const set = await env.DB.prepare("UPDATE weekly SET grp = ?, league = ? WHERE player_id = ? AND week_key = ? AND grp IS NULL").bind(gid, league, playerId, wk).run();
+    if (!set.meta.changes) await env.DB.prepare("UPDATE league_groups SET size = size - 1 WHERE id = ?").bind(gid).run();
+    return true;
+  }
+  return false;
+}
+// Lezár egy véget ért heti csoportot: feljutás, kiesés, jutalom. Igaz, ha most zártuk le.
+async function closeGroup(env, gid) {
+  const g = await env.DB.prepare("SELECT * FROM league_groups WHERE id = ?").bind(gid).first();
+  if (!g || g.done_at || g.week_key >= weekKey(Date.now())) return false;
   const rows = (await env.DB.prepare(
-    "SELECT p.id, p.league, w.xp FROM players p JOIN weekly w ON w.player_id = p.id AND w.week_key = ? WHERE p.class_id = ? AND w.xp > 0 ORDER BY w.xp DESC, p.created_at ASC")
-    .bind(wk, classId).all()).results || [];
-  const stmts = rows.map((r, i) => {
-    const rank = i + 1, z = zones(rows.length, r.league);
+    "SELECT w.player_id AS id, w.xp FROM weekly w JOIN players p ON p.id = w.player_id WHERE w.grp = ? ORDER BY w.xp DESC, p.created_at ASC")
+    .bind(gid).all()).results || [];
+  const z = zones(rows.length, g.league);
+  const stmts = [env.DB.prepare("UPDATE league_groups SET done_at = ? WHERE id = ?").bind(Date.now(), gid)];
+  rows.forEach((r, i) => {
+    const rank = i + 1;
     const res = rank <= z.up ? "up" : z.down && rank > rows.length - z.down ? "down" : "stay";
-    const to = Math.max(0, Math.min(LEAGUE_MAX, r.league + (res === "up" ? 1 : res === "down" ? -1 : 0)));
-    const reward = rank === 1 ? 30 : rank === 2 ? 20 : rank === 3 ? 10 : 0;
-    const result = JSON.stringify({ week: wk, rank, size: rows.length, res, from: r.league, to, reward });
-    return env.DB.prepare("UPDATE players SET league = ?, last_result = ? WHERE id = ?").bind(to, result, r.id);
+    const to = Math.max(0, Math.min(LEAGUE_MAX, g.league + (res === "up" ? 1 : res === "down" ? -1 : 0)));
+    // Drágakő csak annak jár, aki legalább egy másik játékost megelőzött.
+    const reward = rank < rows.length ? LEAGUE_REWARDS[rank - 1] || 0 : 0;
+    const result = JSON.stringify({ week: g.week_key, rank, size: rows.length, res, from: g.league, to, reward });
+    stmts.push(env.DB.prepare("UPDATE players SET league = ?, last_result = ? WHERE id = ?").bind(to, result, r.id));
   });
-  stmts.push(env.DB.prepare("INSERT OR IGNORE INTO class_weeks (class_id, week_key, done_at) VALUES (?, ?, ?)").bind(classId, wk, Date.now()));
   await env.DB.batch(stmts);
+  return true;
 }
+
+// ---------- Óránkénti feladatok: ligazárás és takarítás ----------
 async function hourly(env) {
   const now = Date.now(), cur = weekKey(now);
-  const pending = (await env.DB.prepare(
-    `SELECT DISTINCT p.class_id AS c, w.week_key AS wk FROM weekly w JOIN players p ON p.id = w.player_id
-     WHERE p.class_id IS NOT NULL AND w.week_key < ? AND w.xp > 0
-     AND NOT EXISTS (SELECT 1 FROM class_weeks cw WHERE cw.class_id = p.class_id AND cw.week_key = w.week_key) LIMIT 100`)
-    .bind(cur).all()).results || [];
-  for (const r of pending) await closeClassWeek(env, r.c, r.wk);
+  const open = (await env.DB.prepare("SELECT id FROM league_groups WHERE done_at IS NULL AND week_key < ? LIMIT 300").bind(cur).all()).results || [];
+  for (const g of open) await closeGroup(env, g.id);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM weekly WHERE week_key < ?").bind(addDays(cur, -56)),
+    env.DB.prepare("DELETE FROM league_groups WHERE week_key < ?").bind(addDays(cur, -56)),
     env.DB.prepare("DELETE FROM class_weeks WHERE week_key < ?").bind(addDays(cur, -56)),
     env.DB.prepare("DELETE FROM rate WHERE reset_at < ?").bind(now),
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?").bind(now - 90 * DAY),

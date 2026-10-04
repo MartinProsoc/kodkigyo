@@ -332,6 +332,37 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .q-chest .ic{width:42px;height:42px}
 .q-chest.ready{cursor:pointer;animation:wiggle 1.6s ease-in-out infinite}
 .q-chest.claimed{color:var(--ink-faint)}
+/* Kincsesláda-nyitás: 4 koppintás, közben a láda jobbá válhat */
+.chest-fx{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px));background:#08130F;background:radial-gradient(circle at 50% 44%,color-mix(in srgb,var(--glow) 32%,#0B1A14) 0,#08130F 64%);color:#fff;text-align:center;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer;animation:fadeIn .25s}
+.chest-fx.open{cursor:default}
+.cf-rays{position:absolute;left:50%;top:44%;width:150vmax;height:150vmax;translate:-50% -50%;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--glow) 55%,transparent) 0 9deg,transparent 9deg 24deg);-webkit-mask:radial-gradient(circle,#000 0,transparent 40%);mask:radial-gradient(circle,#000 0,transparent 40%);opacity:calc(.14 + var(--charge,0) * .12);animation:cfSpin 28s linear infinite;pointer-events:none;transition:opacity .4s}
+.chest-fx.open .cf-rays{opacity:.95;animation-duration:12s}
+@keyframes cfSpin{to{rotate:360deg}}
+.cf-head{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px}
+.cf-tier{font:700 13px/1 var(--f-body);letter-spacing:.16em;text-transform:uppercase;padding:8px 14px;border-radius:999px;background:var(--c2);color:#fff;box-shadow:0 3px 0 var(--c3);transition:background .3s}
+.cf-title{font:400 30px/1.1 var(--f-display);margin:0;text-shadow:0 3px 0 rgba(0,0,0,.28)}
+.cf-hint{margin:0;font-size:15px;opacity:.75}
+.cf-stage{position:relative;width:min(290px,70vw);aspect-ratio:140/124}
+.cf-chest{appearance:none;border:0;background:none;padding:0;width:100%;height:100%;cursor:pointer;filter:drop-shadow(0 0 calc(8px + var(--charge,0) * 8px) color-mix(in srgb,var(--glow) 75%,transparent));transition:filter .3s;animation:cfBob 2.2s ease-in-out infinite}
+.cf-chest:focus-visible{outline:3px solid #fff;outline-offset:8px;border-radius:24px}
+.cf-chest svg{display:block;width:100%;height:100%;overflow:visible}
+.cf-lid,.cf-lock{transform-box:fill-box;transform-origin:50% 100%}
+.chest-fx.open .cf-chest{animation:none;cursor:default}
+@keyframes cfBob{50%{translate:0 -7px}}
+.cf-dots{display:flex;gap:10px;position:relative}
+.cf-dots i{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.22);transition:background .2s,transform .2s,box-shadow .2s}
+.cf-dots i.on{background:var(--glow);transform:scale(1.15);box-shadow:0 0 12px var(--glow)}
+.cf-up{position:absolute;left:50%;top:-8px;translate:-50% 0;z-index:2;white-space:nowrap;font:400 24px/1 var(--f-display);color:var(--c3);background:var(--c1);padding:10px 18px;border-radius:16px;box-shadow:0 5px 0 var(--c3);pointer-events:none;animation:comboPop 1.5s cubic-bezier(.2,1.4,.4,1) forwards}
+.cf-flash{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 44%,#fff 0,color-mix(in srgb,var(--glow) 60%,transparent) 28%,transparent 62%);animation:cfFlash .65s ease-out forwards}
+@keyframes cfFlash{from{opacity:1}to{opacity:0}}
+.cf-foot{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:340px;min-height:24px}
+.cf-reward{display:flex;flex-direction:column;align-items:center;gap:10px;animation:zoomIn .4s cubic-bezier(.2,1.3,.4,1)}
+.cf-gems{display:flex;align-items:center;gap:10px;font:400 46px/1 var(--f-display);text-shadow:0 3px 0 rgba(0,0,0,.3)}
+.cf-gems .ic{width:46px;height:46px;color:#A68CFF;filter:drop-shadow(0 3px 0 rgba(0,0,0,.3))}
+.cf-perk{display:flex;align-items:center;gap:8px;font-weight:700;color:#FFE08A}
+.cf-perk .ic{width:20px;height:20px}
+.cf-done{width:100%}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .month-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:linear-gradient(135deg,var(--gem),var(--blue));color:var(--on-color);border-radius:22px;padding:18px;box-shadow:0 5px 0 var(--gem-deep)}
 .month-badge{width:76px;height:84px;color:var(--sun)}
 .month-card h3{font-size:22px}
@@ -927,10 +958,21 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const FREEZE_MAX = 2;
   const BOOST_MS = 15 * 60 * 1000;
   const PRICE = { freeze: 100, refill: 80, boost: 60, repair: 150, legendary: 30 };
-  const START_GEMS = 200;
+  const START_GEMS = 50;
   const MONTH_GOAL = 20;
   const GOALS = [{ xp: 10, name: "Laza" }, { xp: 20, name: "Rendszeres" }, { xp: 30, name: "Komoly" }, { xp: 50, name: "Elszánt" }];
-  const MILESTONES = { 3: 10, 7: 20, 14: 30, 30: 50, 50: 75, 100: 100, 150: 120, 200: 150, 365: 250 };
+  const MILESTONES = { 3: 5, 7: 10, 14: 15, 30: 25, 50: 40, 100: 50, 150: 60, 200: 75, 365: 125 };
+  const MONTH_GEMS = 30;
+  const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő a heti ligazáráskor
+  // Ládák: koppintásonként esély van rá, hogy a láda egy szinttel jobb lesz.
+  const CHEST_TIERS = [
+    { name: "Fa láda", c1: "#D39552", c2: "#9A5F2C", c3: "#5B3517", band: "#8E9AA8", glow: "#F0B070", gems: [4, 7] },
+    { name: "Ezüst láda", c1: "#E3EAF1", c2: "#A9B7C6", c3: "#56667A", band: "#7D8DA0", glow: "#CFE3F7", gems: [8, 12] },
+    { name: "Arany láda", c1: "#FFD54F", c2: "#E9A514", c3: "#8F5800", band: "#C7860A", glow: "#FFCF40", gems: [15, 22] },
+    { name: "Smaragd láda", c1: "#45E3A6", c2: "#13A66C", c3: "#075637", band: "#F3C343", glow: "#5CFFC0", gems: [30, 40], boost: true },
+  ];
+  const CHEST_UP = [0.3, 0.15, 0.06]; // fejlődési esély koppintásonként: fa→ezüst, ezüst→arany, arany→smaragd
+  const CHEST_TAPS = 4;
   const COMBO_MILESTONES = new Set([3, 5, 10, 15, 20, 25, 30]);
   const OFFSETS = [0, 1, 1.4, 1, 0, -1, -1.4, -1];
   const PRAISE = ["Szuper!", "Pontosan!", "Ügyes vagy!", "Így van!", "Telitalálat!", "Nagyszerű!", "Hibátlan!"];
@@ -1076,20 +1118,20 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // ===================== State =====================
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   function newCode() { let s = ""; for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return s; }
-  function freshStats() { return { lessons: 0, perfect: 0, correct: 0, maxCombo: 0, quests: 0, practice: 0, fixed: 0, timedBest: 0, top3: 0 }; }
+  function freshStats() { return { lessons: 0, perfect: 0, correct: 0, maxCombo: 0, quests: 0, practice: 0, fixed: 0, timedBest: 0, top3: 0, chests: 0 }; }
   function fresh() {
     return {
       v: 2, xp: 0, streak: 0, bestStreak: 0, lastDay: null, best: {}, done: {}, legend: {}, chests: {}, daily: {}, frozen: [],
       freezes: 0, gems: START_GEMS, hearts: HEART_MAX, heartTs: 0, boostUntil: 0, lostStreak: null, quests: null, monthly: null,
       badges: [], ach: {}, mistakes: {}, stats: freshStats(), goal: 30, joined: today(), code: newCode(), follows: [],
-      league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0,
+      league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0, epoch: 0,
     };
   }
   function normalize(o) {
     const s = fresh();
     if (!o || typeof o !== "object") return s;
     const n = (k) => { if (Number.isFinite(o[k])) s[k] = o[k]; };
-    ["xp", "streak", "bestStreak", "freezes", "gems", "hearts", "heartTs", "boostUntil", "goal", "league", "weekXp", "updatedAt"].forEach(n);
+    ["xp", "streak", "bestStreak", "freezes", "gems", "hearts", "heartTs", "boostUntil", "goal", "league", "weekXp", "updatedAt", "epoch"].forEach(n);
     for (const k of ["lastDay", "joined", "code", "weekKey", "skin", "seenResult"]) if (typeof o[k] === "string") s[k] = o[k];
     for (const k of ["best", "done", "legend", "chests", "daily", "ach", "mistakes"]) if (o[k] && typeof o[k] === "object" && !Array.isArray(o[k])) s[k] = { ...o[k] };
     for (const k of ["frozen", "badges", "follows", "skins", "notices"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
@@ -1124,16 +1166,37 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function saveLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) {} }
-  function save() {
+  // quiet: automatikus könyvelés (heti/napi váltás, értesítés elolvasása). Ez minden eszközön
+  // ugyanúgy lefut, ezért nem számít a játékos lépésének: nem frissíti az updatedAt-et, és nem tölti fel.
+  function save(quiet) {
     const days = Object.keys(state.daily).sort();
     while (days.length > 400) delete state.daily[days.shift()];
     if (state.frozen.length > 400) state.frozen = state.frozen.slice(-400);
     const mk = Object.entries(state.mistakes).sort((a, b) => a[1] - b[1]);
     while (mk.length > 60) delete state.mistakes[mk.shift()[0]];
+    if (quiet) { saveLocal(); return; }
     state.updatedAt = Date.now();
     saveLocal();
     pushRemote();
     schedulePublish();
+  }
+  // Két mentés közül melyik maradjon (pl. új eszközön belépéskor). A haladás törlése új korszakot
+  // (epoch) kezd, az mindig nyer; különben a több XP, egyenlő XP-nél a később módosított.
+  function remoteWins(remote, local) {
+    if (!remote) return false;
+    const re = remote.epoch || 0, le = local.epoch || 0;
+    if (re !== le) return re > le;
+    if (remote.xp !== local.xp) return remote.xp > local.xp;
+    return remote.updatedAt > local.updatedAt;
+  }
+  function adoptState(remote) {
+    state = remote;
+    saveLocal();
+    applySkin();
+    ensureQuests();
+    syncHearts();
+    settleStreak();
+    rollWeek(leagueMode());
   }
 
   // ===================== Progress helpers =====================
@@ -1193,7 +1256,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       state.notices.push({ type: "lost", n: state.streak });
       state.streak = 0;
     }
-    save();
+    save(true);
   }
   function repairAvailable() { return !!(state.lostStreak && daysBetween(state.lostStreak.day, today()) <= 2); }
   function repairStreak() {
@@ -1232,8 +1295,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       state.quests = {
         day: t,
         list: [
-          { kind: "xp", goal: state.goal, prog: 0, claimed: false, reward: 10 + GOALS.findIndex((g) => g.xp === state.goal) * 5, icon: "bolt" },
-          ...picks.map((q) => { const gi = Math.floor(R() * q.goals.length); return { kind: q.kind, goal: q.goals[gi], prog: 0, claimed: false, reward: 10 + gi * 5, icon: q.icon }; }),
+          { kind: "xp", goal: state.goal, prog: 0, claimed: false, chest: GOALS.findIndex((g) => g.xp === state.goal) >= 2 ? 1 : 0, icon: "bolt" },
+          ...picks.map((q) => { const gi = Math.floor(R() * q.goals.length); return { kind: q.kind, goal: q.goals[gi], prog: 0, claimed: false, chest: gi >= 1 ? 1 : 0, icon: q.icon }; }),
         ],
       };
     }
@@ -1257,18 +1320,38 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         if (!state.monthly.done && state.monthly.n >= MONTH_GOAL) {
           state.monthly.done = true;
           state.badges.push(state.monthly.month);
-          addGems(50);
+          addGems(MONTH_GEMS);
         }
       }
     });
   }
+  // A régi mentésekben a küldetésnek még drágakő-jutalma volt; abból számoljuk ki a láda szintjét.
+  function questChest(q) { return q.chest != null ? q.chest : q.reward >= 15 ? 1 : 0; }
+  // A láda eredményét már a kinyitás előtt kisorsoljuk és elmentjük, így újratöltéssel nem lehet újrapróbálni.
+  function rollChest(base) {
+    const path = [base];
+    let t = base;
+    for (let k = 1; k < CHEST_TAPS; k++) {
+      if (t < CHEST_TIERS.length - 1 && Math.random() < CHEST_UP[t]) t++;
+      path.push(t);
+    }
+    const T = CHEST_TIERS[t];
+    const gems = T.gems[0] + Math.floor(Math.random() * (T.gems[1] - T.gems[0] + 1));
+    return { path, tier: t, gems, boost: !!T.boost };
+  }
+  function grantChest(r) {
+    addGems(r.gems);
+    if (r.boost) state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS;
+    state.stats.chests = (state.stats.chests || 0) + 1;
+  }
   function claimQuest(i) {
     const q = state.quests.list[i];
-    if (!q || q.claimed || q.prog < q.goal) return 0;
+    if (!q || q.claimed || q.prog < q.goal) return null;
     q.claimed = true;
-    addGems(q.reward);
+    const r = rollChest(questChest(q));
+    grantChest(r);
     save();
-    return q.reward;
+    return r;
   }
   function questsClaimable() { ensureQuests(); return state.quests.list.filter((q) => q.prog >= q.goal && !q.claimed).length; }
   function achTier(a) { const v = a.val(); let t = 0; a.tiers.forEach((th, i) => { if (v >= th) t = i + 1; }); return t; }
@@ -1277,7 +1360,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     ACH.forEach((a) => {
       const t = achTier(a), had = state.ach[a.id] || 0;
       if (t > had) {
-        for (let k = had + 1; k <= t; k++) addGems(10 * k);
+        for (let k = had + 1; k <= t; k++) addGems(5 * k);
         state.ach[a.id] = t;
         news.push({ a, tier: t });
       }
@@ -1307,18 +1390,20 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     }
     return Math.floor(xp);
   }
-  // "online": claude.ai-os közös liga, "class": osztályliga a saját szerveren, "bots": gépi ellenfelek.
+  // "online": claude.ai-os közös liga, "server": a saját szerver közös online ligája (fiókkal),
+  // "bots": gépi ellenfelek (fiók nélkül vagy offline).
   function leagueMode() {
     if (NET.mode === "claude" && NET.ready) return "online";
-    if (NET.mode === "server" && NET.ready && NET.cls) return "class";
+    if (NET.mode === "server" && NET.ready && NET.token) return "server";
     return "bots";
   }
   function meEntry(xp) { return { id: "me", isMe: true, name: myName(), xp, league: state.league }; }
   function board(wk, league, at) {
     const mineXp = wk === state.weekKey ? state.weekXp : state.prevWeek && state.prevWeek.key === wk ? state.prevWeek.xp : 0;
     let rows;
-    if (leagueMode() === "class") {
-      rows = NET.cls.members.filter((m) => m.id !== NET.uid).map((m) => {
+    if (leagueMode() === "server") {
+      // A szerver hetente legfeljebb 30 fős csoportokba osztja a ligák játékosait.
+      rows = (NET.league ? NET.league.members : []).filter((m) => m.id !== NET.uid).map((m) => {
         const p = NET.players.get(m.id) || cleanPlayer(m);
         return { id: m.id, name: p.nick, online: true, xp: p.weekKey === wk ? p.weekXp : 0, streak: liveOf(p) };
       });
@@ -1337,21 +1422,25 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     rows.sort((a, b) => b.xp - a.xp || (a.isMe ? -1 : b.isMe ? 1 : 0));
     return rows;
   }
+  // Ugyanez a szabály van a szerveren is (src/worker.js), a kettőnek egyeznie kell.
   function zones(size, league) {
-    return { up: league < LEAGUES.length - 1 ? Math.min(3, Math.max(1, size - 1)) : 0, down: league > 0 && size >= 8 ? 3 : 0 };
+    const up = league < LEAGUES.length - 1 ? (size >= 15 ? 5 : Math.min(3, Math.max(1, size - 1))) : 0;
+    const down = league > 0 && size >= 8 ? (size >= 15 ? 5 : 3) : 0;
+    return { up, down };
   }
   function rollWeek(mode) {
     const cur = weekKey();
     if (state.weekKey === cur) return;
     if (state.weekKey) {
       const old = state.weekKey, lg = state.league;
-      // Osztályligában a szerver zárja le a hetet (serverLeagueSync hozza az eredményt).
-      if (state.weekXp > 0 && mode !== "class") {
+      // Fiókkal a szerver zárja le a hetet (serverLeagueSync hozza az eredményt), akkor is, ha épp nincs kapcsolat.
+      const serverDecides = mode === "server" || (!!NET.token && NET.mode !== "claude");
+      if (state.weekXp > 0 && !serverDecides) {
         const rows = board(old, lg, weekEndMs(old));
         const rank = rows.findIndex((r) => r.isMe) + 1;
         const z = zones(rows.length, lg);
         const res = rank <= z.up ? "up" : z.down && rank > rows.length - z.down ? "down" : "stay";
-        const reward = rank === 1 ? 30 : rank === 2 ? 20 : rank === 3 ? 10 : 0;
+        const reward = LEAGUE_REWARDS[rank - 1] || 0;
         if (rank <= 3) state.stats.top3++;
         addGems(reward);
         state.league = Math.min(LEAGUES.length - 1, Math.max(0, lg + (res === "up" ? 1 : res === "down" ? -1 : 0)));
@@ -1361,7 +1450,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     }
     state.weekKey = cur;
     state.weekXp = 0;
-    save();
+    save(true);
   }
 
   // ===================== Sound =====================
@@ -1493,6 +1582,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     boop() { osc("sine", 280, 0, 0.22, 0.22, { to: 720, glide: 0.12 }); osc("triangle", 560, 0.05, 0.12, 0.05, { to: 1200 }); },
     coin() { bell(N(88), 0, 0.3, 0.12); bell(N(95), 0.07, 0.6, 0.14); noise(0.05, 0.2, 0.03, "highpass", 6000); },
     chest() { osc("square", 180, 0, 0.08, 0.06, { lp: 900 }); noise(0.05, 0.4, 0.05, "bandpass", 600, 4000, 1); [0, 4, 7, 12, 16].forEach((s, i) => bell(N(81 + s), 0.15 + i * 0.06, 0.6, 0.09)); },
+    chestTap(k) { osc("square", 120 + k * 35, 0, 0.09, 0.08, { lp: 800 }); noise(0, 0.09, 0.08, "lowpass", 700); bell(N(67 + k * 5), 0.03, 0.4, 0.07, 0.3); },
+    chestUp(t) {
+      osc("sine", 260, 0, 0.45, 0.14, { to: 1040, glide: 0.35 });
+      [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => bell(N(74 + t * 2 + s), 0.08 + i * 0.045, 0.7, 0.08));
+      noise(0, 0.8, 0.05, "highpass", 5000, 9000);
+    },
+    chestOpen(t) {
+      osc("sine", 150, 0, 0.4, 0.38, { to: 45 });
+      noise(0, 0.55, 0.09, "bandpass", 300, 6000, 0.8);
+      [0, 4, 7, 12, 16, 19, 24, 28].slice(0, 5 + t).forEach((s, i) => bell(N(79 + s), 0.14 + i * 0.05, 0.9, 0.08));
+    },
     freeze() { [96, 91, 98, 93, 100].forEach((m, i) => bell(N(m), i * 0.06, 0.5, 0.06)); noise(0, 0.6, 0.03, "highpass", 8000); },
     flame() { noise(0, 0.5, 0.08, "bandpass", 200, 1800, 0.8); bell(N(76), 0.2, 0.5, 0.1); bell(N(83), 0.3, 0.8, 0.12); },
     tickTock() { osc("square", 1600, 0, 0.03, 0.03, { lp: 3000 }); },
@@ -1668,6 +1768,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const NET = {
     mode: null, db: null, user: null, uid: null, me: null, players: new Map(), ready: false, canWrite: true, progressRef: null,
     lastPub: "", pubTimer: 0, publishing: false, failed: false, token: null, cls: null, followersList: [], pollTimer: 0, pushTimer: 0,
+    pulledAt: 0, pendingRemote: null, league: null,
   };
   let pushing = false, pushAgain = false;
   function myName() {
@@ -1705,8 +1806,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (NET.publishing) { schedulePublish(); return; }
     NET.publishing = true;
     try {
-      if (NET.mode === "server") await api("PUT", "me", { stats: doc });
-      else await NET.db.doc("players/" + NET.uid).set(doc);
+      if (NET.mode === "server") {
+        const res = await api("PUT", "me", { stats: doc });
+        // Az első heti XP-vel a szerver csoportba sorol: ekkor lekérjük a csoport tagjait.
+        if (res && res.grouped && !(NET.league && NET.league.grouped)) refreshSocial().then(renderSocial, () => {});
+      } else await NET.db.doc("players/" + NET.uid).set(doc);
       NET.lastPub = json;
     } catch (e) {
       if (NET.mode === "server") { if (e.status === 401) { forgetAccount(); renderSocial(); } }
@@ -1718,7 +1822,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (NET.mode === "server") {
       if (!NET.token || !NET.canWrite) return;
       clearTimeout(NET.pushTimer);
-      NET.pushTimer = setTimeout(pushServerProgress, 4000);
+      NET.pushTimer = setTimeout(pushServerProgress, 1500);
       return;
     }
     if (!NET.progressRef) return;
@@ -1730,10 +1834,46 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (pushAgain) { pushAgain = false; pushRemote(); }
   }
   async function pushServerProgress() {
+    clearTimeout(NET.pushTimer);
+    NET.pushTimer = 0;
     if (!NET.token || !NET.canWrite) return;
     try { await api("PUT", "progress", { data: JSON.parse(JSON.stringify(state)), updatedAt: state.updatedAt }); }
-    catch (e) { if (e.status === 401) { forgetAccount(); renderSocial(); } }
+    catch (e) {
+      if (e.status === 401) { forgetAccount(); renderSocial(); }
+      // A szerveren több haladás van (egy másik eszközről): azt töltjük be, nem írjuk felül.
+      else if (e.status === 409 && e.data && e.data.data) takeServerState(normalize(e.data.data));
+    }
   }
+  function takeServerState(remote) {
+    if (S) { NET.pendingRemote = remote; return; }
+    adoptState(remote);
+    publishPlayer(true);
+    render();
+    toast("Betöltöttük a haladásodat a másik eszközödről.");
+  }
+  // Ha a fül a háttérbe kerül vagy bezárul, a függő mentést azonnal elküldjük.
+  function flushServer() {
+    if (NET.mode !== "server" || !NET.token || !NET.canWrite || !NET.pushTimer) return;
+    clearTimeout(NET.pushTimer);
+    NET.pushTimer = 0;
+    const body = JSON.stringify({ data: state, updatedAt: state.updatedAt });
+    try {
+      fetch("/api/progress", { method: "PUT", keepalive: body.length < 60000, cache: "no-store",
+        headers: { "content-type": "application/json", authorization: "Bearer " + NET.token }, body });
+    } catch (e) {}
+  }
+  // Ha visszatér a fülre, megnézzük, nem haladt-e közben egy másik eszközön.
+  async function pullServer() {
+    if (NET.mode !== "server" || !NET.token || S || NET.pushTimer || Date.now() - (NET.pulledAt || 0) < 15000) return;
+    NET.pulledAt = Date.now();
+    try {
+      const pr = await api("GET", "progress");
+      const remote = pr && pr.data ? normalize(pr.data) : null;
+      if (remoteWins(remote, state)) takeServerState(remote);
+    } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flushServer(); else pullServer(); });
+  window.addEventListener("pagehide", flushServer);
 
   // ---------- claude.ai artifact mód ----------
   async function connectRemote() {
@@ -1754,8 +1894,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         const snap = await ref.get();
         NET.progressRef = ref;
         const remote = snap.exists ? normalize(snap.data()) : null;
-        if (remote && remote.updatedAt > state.updatedAt) { state = remote; saveLocal(); applySkin(); }
-        else if (state.updatedAt && (!remote || state.updatedAt > remote.updatedAt)) pushRemote();
+        if (remoteWins(remote, state)) adoptState(remote);
+        else if (state.updatedAt && (!remote || state.updatedAt !== remote.updatedAt)) pushRemote();
       } catch (e) {}
       await new Promise((resolve) => {
         let first = true;
@@ -1784,7 +1924,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     catch (e) { const err = new Error("Nincs kapcsolat a szerverrel. Ellenőrizd az internetet!"); err.status = 0; throw err; }
     let data = null;
     try { data = await r.json(); } catch (e) {}
-    if (!r.ok) { const err = new Error((data && data.error) || "Hiba történt. Próbáld újra!"); err.status = r.status; throw err; }
+    if (!r.ok) { const err = new Error((data && data.error) || "Hiba történt. Próbáld újra!"); err.status = r.status; err.data = data; throw err; }
     return data;
   }
   async function connectServer() {
@@ -1801,11 +1941,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   async function loadAccount() {
     try {
-      await refreshSocial();
+      // Előbb a mentést egyeztetjük, csak utána jönnek a ligaeredmények és a statisztikák.
       const pr = await api("GET", "progress");
       const remote = pr && pr.data ? normalize(pr.data) : null;
-      if (remote && remote.updatedAt > state.updatedAt) { state = remote; saveLocal(); applySkin(); await refreshSocial(); }
-      else pushServerProgress();
+      if (remoteWins(remote, state)) adoptState(remote);
+      else await pushServerProgress();
+      await refreshSocial();
+      NET.pulledAt = Date.now();
       publishPlayer(true);
       startPolling();
       return true;
@@ -1819,8 +1961,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     NET.uid = s.me.id;
     NET.me = s.me;
     NET.cls = s.class || null;
+    NET.league = s.league || null;
+    NET.socialAt = Date.now();
     const m = new Map();
-    [s.me, ...s.following, ...s.followers, ...(s.class ? s.class.members : [])].forEach((p) => m.set(p.id, cleanPlayer(p)));
+    [s.me, ...s.following, ...s.followers, ...(s.class ? s.class.members : []), ...(s.league ? s.league.members : [])].forEach((p) => m.set(p.id, cleanPlayer(p)));
     NET.players = m;
     NET.followersList = s.followers.map((p) => p.id);
     state.follows = s.following.map((p) => p.id);
@@ -1831,18 +1975,24 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (s.me.xp < state.xp || (state.weekKey === s.week && s.me.weekXp < state.weekXp)) schedulePublishForce();
   }
   function schedulePublishForce() { clearTimeout(NET.pubTimer); NET.pubTimer = setTimeout(() => publishPlayer(true), 30000); }
-  // Osztályban a ligát a szerver zárja le hetente; az eredményt egyszer mutatjuk meg.
+  // Fiókkal a ligát a szerver zárja le hetente; az eredményt egyszer mutatjuk meg.
   function serverLeagueSync() {
     if (NET.mode !== "server" || !NET.me) return;
-    if (NET.me.classId) state.league = Math.min(LEAGUES.length - 1, Math.max(0, NET.me.league));
+    state.league = Math.min(LEAGUES.length - 1, Math.max(0, NET.league ? NET.league.tier : NET.me.league));
     const r = NET.me.lastResult;
     if (r && r.week && state.seenResult !== r.week) {
       state.seenResult = r.week;
       if (r.reward) addGems(r.reward);
       if (r.rank <= 3) state.stats.top3++;
-      state.notices.push({ type: "league", rank: r.rank, res: r.res, from: r.from, to: r.to, reward: r.reward, mode: "class" });
+      state.notices.push({ type: "league", rank: r.rank, res: r.res, from: r.from, to: r.to, reward: r.reward, mode: "online" });
       save();
     }
+  }
+  // Liga fülre lépve frissítjük az állást (legfeljebb 20 másodpercenként).
+  function refreshLeagueSoon() {
+    if (NET.mode !== "server" || !NET.token || Date.now() - (NET.socialAt || 0) < 20000) return;
+    NET.socialAt = Date.now();
+    refreshSocial().then(renderSocial, () => {});
   }
   function startPolling() {
     clearInterval(NET.pollTimer);
@@ -1875,7 +2025,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function loginCode() { return NET.token ? NET.token.replace(".", "").match(/.{1,4}/g).join("-") : ""; }
   function forgetAccount() {
     clearInterval(NET.pollTimer); clearTimeout(NET.pubTimer); clearTimeout(NET.pushTimer);
-    Object.assign(NET, { token: null, uid: null, me: null, cls: null, players: new Map(), followersList: [], ready: false, lastPub: "" });
+    Object.assign(NET, { token: null, uid: null, me: null, cls: null, league: null, players: new Map(), followersList: [], ready: false, lastPub: "", pendingRemote: null });
     try { localStorage.removeItem(ACCOUNT_KEY); } catch (e) {}
     state.follows = [];
     saveLocal();
@@ -1969,6 +2119,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     prefs.view = view;
     savePrefs();
     render();
+    if (view === "league") refreshLeagueSoon();
     if (changed) window.scrollTo(0, 0);
   }
   function render() {
@@ -2194,19 +2345,143 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     save();
     startSession({ mode: "legendary", i });
   }
+  // ---------- Kincsesláda-nyitás ----------
+  // A láda négy koppintásra nyílik; az első hármat követően a láda egy szinttel jobb lehet.
+  // Az eredményt (r.path) a rollChest már előre eldöntötte, itt csak megmutatjuk.
+  const CHEST_SVG = '<svg viewBox="0 0 140 124" aria-hidden="true"><defs><clipPath id="cfLidClip"><path d="M18 58V44C18 27 29 16 47 16H93C111 16 122 27 122 44V58Z"/></clipPath></defs>' +
+    '<ellipse cx="70" cy="115" rx="56" ry="7" fill="#000" opacity=".3"/>' +
+    '<rect class="cf-inside" x="24" y="48" width="92" height="14" rx="6" fill="var(--glow)" opacity="0"/>' +
+    '<rect x="18" y="56" width="104" height="54" rx="10" fill="var(--c2)"/><rect x="18" y="56" width="104" height="45" rx="10" fill="var(--c1)"/>' +
+    '<path d="M20 75H120M20 91H120" stroke="var(--c2)" stroke-width="3" opacity=".6"/>' +
+    '<rect x="32" y="56" width="13" height="54" fill="var(--band)"/><rect x="95" y="56" width="13" height="54" fill="var(--band)"/>' +
+    '<rect x="18" y="56" width="104" height="54" rx="10" fill="none" stroke="var(--c3)" stroke-width="3.5"/>' +
+    '<g class="cf-lid"><g clip-path="url(#cfLidClip)"><rect x="10" y="10" width="120" height="50" fill="var(--c1)"/><rect x="10" y="49" width="120" height="10" fill="var(--c2)"/>' +
+    '<rect x="32" y="10" width="13" height="50" fill="var(--band)"/><rect x="95" y="10" width="13" height="50" fill="var(--band)"/></g>' +
+    '<path d="M28 31C33 24 40 21 50 21" stroke="#fff" stroke-width="4.5" stroke-linecap="round" fill="none" opacity=".5"/>' +
+    '<path d="M18 58V44C18 27 29 16 47 16H93C111 16 122 27 122 44V58Z" fill="none" stroke="var(--c3)" stroke-width="3.5" stroke-linejoin="round"/></g>' +
+    '<g class="cf-lock"><rect x="58" y="47" width="24" height="27" rx="6" fill="var(--band)" stroke="var(--c3)" stroke-width="3"/>' +
+    '<circle cx="70" cy="57.5" r="3.6" fill="var(--c3)"/><rect x="68.4" y="58" width="3.2" height="9" rx="1.6" fill="var(--c3)"/></g></svg>';
+  let chestFxOpen = false;
+  function openChestFx(r, onDone) {
+    chestFxOpen = true;
+    const prevFocus = document.activeElement;
+    let tier = r.path[0], taps = 0, lockUntil = 0, opened = false;
+    const tierEl = el("span", { class: "cf-tier" });
+    const title = el("h2", { class: "cf-title", id: "chestTitle" }, "Koppints a ládára!");
+    const hint = el("p", { class: "cf-hint" }, "Minden koppintásnál jobb ládává válhat!");
+    const chest = el("button", { class: "cf-chest", type: "button", html: CHEST_SVG });
+    const stage = el("div", { class: "cf-stage" }, chest);
+    const dots = el("div", { class: "cf-dots", "aria-hidden": "true" }, Array.from({ length: CHEST_TAPS }, () => el("i")));
+    const foot = el("div", { class: "cf-foot" });
+    const live = el("p", { class: "sr-only", "aria-live": "assertive" });
+    const root = el("div", { class: "chest-fx", role: "dialog", "aria-modal": "true", "aria-labelledby": "chestTitle" },
+      el("div", { class: "cf-rays", "aria-hidden": "true" }), el("div", { class: "cf-head" }, tierEl, title), stage, dots, hint, foot, live);
+    const T = () => CHEST_TIERS[tier];
+    const paint = () => {
+      root.style.cssText = `--c1:${T().c1};--c2:${T().c2};--c3:${T().c3};--band:${T().band};--glow:${T().glow};--charge:${taps}`;
+      tierEl.textContent = T().name;
+      const left = CHEST_TAPS - taps;
+      chest.setAttribute("aria-label", T().name + (opened ? ", kinyitva" : left > 1 ? ". Koppints rá, még " + left + " koppintás." : ". Koppints rá, és kinyílik!"));
+    };
+    paint();
+    document.body.append(root);
+    sfx("start");
+    requestAnimationFrame(() => chest.focus({ preventScroll: true }));
+
+    function tap() {
+      if (opened || performance.now() < lockUntil) return;
+      taps++;
+      dots.children[taps - 1].classList.add("on");
+      if (taps >= CHEST_TAPS) { open(); return; }
+      const next = r.path[taps];
+      sfx("chestTap", taps);
+      buzz(15 + taps * 10);
+      const a = 4 + taps * 3;
+      animate(chest, [{ transform: "none" }, { transform: `rotate(${-a}deg) scale(1.07,.93)` }, { transform: `rotate(${a}deg) scale(.95,1.06)` }, { transform: `rotate(${-a / 2}deg)` }, { transform: "none" }], { duration: 380, easing: "ease-out" });
+      burstAt(chest, { n: 5 + taps * 3, speed: 0.55 + taps * 0.15, colors: [T().glow, "#FFFFFF"], ring: false });
+      title.textContent = taps === CHEST_TAPS - 1 ? "Még egyszer, és kinyílik!" : "Még " + (CHEST_TAPS - taps) + " koppintás!";
+      lockUntil = performance.now() + 240;
+      if (next > tier) { lockUntil = performance.now() + 950; setTimeout(() => upgrade(next), 280); }
+      else paint();
+    }
+    function upgrade(t) {
+      if (opened) return;
+      tier = t;
+      paint();
+      const flash = el("div", { class: "cf-flash" });
+      const pop = el("div", { class: "cf-up" }, "Fejlődött! " + T().name);
+      root.append(flash);
+      stage.append(pop);
+      setTimeout(() => { flash.remove(); pop.remove(); }, 1500);
+      sfx("chestUp", t);
+      buzz(70);
+      animate(chest, [{ transform: "scale(.72)" }, { transform: "scale(1.22)" }, { transform: "none" }], { duration: 560, easing: "cubic-bezier(.2,1.4,.4,1)" });
+      burstAt(chest, { n: 24, speed: 1.3, colors: [T().glow, T().c1, "#FFFFFF"], ringSize: 90 });
+      live.textContent = "Fejlődött a láda: " + T().name + "!";
+    }
+    function open() {
+      opened = true;
+      tier = r.tier;
+      root.classList.add("open");
+      paint();
+      title.textContent = "Kinyitottad!";
+      hint.hidden = true;
+      sfx("chestOpen", tier);
+      buzz(120);
+      const lid = chest.querySelector(".cf-lid"), lock = chest.querySelector(".cf-lock"), inside = chest.querySelector(".cf-inside");
+      if (REDUCED) { lid.style.transform = "translate(-4px,-44px) rotate(-15deg)"; lock.style.opacity = "0"; inside.style.opacity = "1"; }
+      else {
+        chest.animate([{ transform: "none" }, { transform: "scale(1.1,.88)" }, { transform: "translateY(-8px) scale(.94,1.08)" }, { transform: "none" }], { duration: 440, easing: "ease-out" });
+        lid.animate([{ transform: "none" }, { transform: "translate(-8px,-64px) rotate(-26deg)" }, { transform: "translate(-4px,-44px) rotate(-15deg)" }], { duration: 680, delay: 110, easing: "cubic-bezier(.2,1.3,.4,1)", fill: "forwards" });
+        lock.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(12px)" }], { duration: 260, delay: 90, fill: "forwards" });
+        inside.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 320, delay: 180, fill: "forwards" });
+      }
+      setTimeout(() => {
+        burstAt(chest, { n: 32, speed: 1.7, colors: [cssVar("--gem"), T().glow, "#FFFFFF"], ringSize: 120 });
+        if (tier >= 2) fx.confetti();
+      }, 200);
+      const num = el("span", null, "+0");
+      const done = el("button", { class: "btn wide cf-done", type: "button", onclick: close }, "Szuper!");
+      foot.replaceChildren(el("div", { class: "cf-reward" }, el("div", { class: "cf-gems" }, icon("gem"), num),
+        r.boost ? el("div", { class: "cf-perk" }, icon("bolt"), "+15 perc dupla XP") : null), done);
+      countUp(num, 0, r.gems, 900, (v) => "+" + v, () => sfx("tick"));
+      live.textContent = "Kinyílt a láda! " + r.gems + " drágakövet kaptál" + (r.boost ? ", és 15 perc dupla XP-t." : ".");
+      setTimeout(() => { if (done.isConnected) done.focus({ preventScroll: true }); }, 450);
+    }
+    function close() {
+      if (!root.isConnected) return;
+      root.remove();
+      chestFxOpen = false;
+      window.removeEventListener("keydown", onKey, true);
+      if (prevFocus && prevFocus.isConnected) prevFocus.focus({ preventScroll: true });
+      if (onDone) onDone();
+    }
+    // Bárhová koppinthat a képernyőn; a billentyűk csak a ládához érnek el, a lecke nem kapja meg őket.
+    root.addEventListener("click", (e) => { if (!opened) tap(); else if (e.target === root) close(); });
+    function onKey(e) {
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (opened) close();
+        else { taps = CHEST_TAPS; [...dots.children].forEach((d) => d.classList.add("on")); open(); }
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        const b = foot.querySelector("button");
+        (opened && b ? b : chest).focus();
+      }
+    }
+    window.addEventListener("keydown", onKey, true);
+  }
   function openChest(uid, btn) {
     if (state.chests[uid]) { toast("Ezt a ládát már kinyitottad."); return; }
     if (!unitDone(uid)) { sfx("tap"); retrigger(btn, "bump"); toast("Fejezd be az egység leckéit, és kinyílik a láda."); return; }
     state.chests[uid] = true;
-    addGems(20);
+    const r = rollChest(1);
+    grantChest(r);
     save();
-    sfx("chest");
     btn.classList.add("opened");
     btn.replaceChildren(icon("chestOpen"));
-    gemBurst(btn);
-    toast("+20 drágakő a ládából!");
-    renderChips();
-    renderRail();
+    openChestFx(r, () => { renderChips(); renderRail(); });
   }
   function chapterSheet() {
     const cur = currentIndex(), curCh = cur === -1 ? null : chapterOf(LESSONS[cur]);
@@ -2280,8 +2555,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
 
   // ===================== League view =====================
-  function boardRows(rows, lg, limit) {
-    const z = zones(rows.length, lg);
+  function boardRows(rows, lg, limit, noZones) {
+    const z = noZones ? { up: 0, down: 0 } : zones(rows.length, lg);
     const host = el("div", { class: "board" + (limit ? " mini-board" : "") });
     const ids = rows.filter((r) => r.online).map((r) => r.id);
     rows.slice(0, limit || rows.length).forEach((r, i) => {
@@ -2308,29 +2583,45 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return host;
   }
   function renderLeague() {
+    const mode = leagueMode();
+    rollWeek(mode);
     const lg = state.league, L = LEAGUES[lg];
-    rollWeek(leagueMode());
     const rows = board(state.weekKey, lg);
+    const z = zones(rows.length, lg);
     const left = weekEndMs(state.weekKey) - Date.now();
     const badges = el("div", { class: "leagues", role: "img", "aria-label": "Ligák: " + LEAGUES.map((x) => x.name).join(", ") });
     const from = Math.max(0, Math.min(lg - 2, LEAGUES.length - 7));
     LEAGUES.slice(from, from + 7).forEach((_, k) => { const i = from + k; badges.append(leagueBadge(i, i === lg ? "cur" : i > lg ? "locked" : "")); });
-    const mode = leagueMode();
+    const grouped = mode === "server" && NET.league && NET.league.grouped;
     const root = el("div", { class: "view" },
       el("div", { class: "league-head" }, badges, el("h1", null, L.name + " liga"),
-        mode === "class" ? el("span", { class: "pill", style: "background:var(--blue-soft);color:var(--blue)" }, icon("users"), "Osztályliga · " + NET.cls.name) : null,
-        el("p", { class: "muted" }, lg < LEAGUES.length - 1 ? (mode === "class" ? "A hét végén az osztályod legjobb 3 tagja feljut a következő ligába." : "A hét végén az első 3 feljut a következő ligába.") : "Ez a legmagasabb liga. Tartsd meg a helyed!"),
+        mode === "server" ? el("span", { class: "pill", style: "background:var(--blue-soft);color:var(--blue)" }, icon("users"), grouped ? "Online liga · " + rows.length + " versenyző" : "Online liga") : null,
+        el("p", { class: "muted" }, lg < LEAGUES.length - 1 ? "A hét végén az első " + z.up + " feljut a következő ligába." + (z.down ? " Az utolsó " + z.down + " kiesik." : "") : "Ez a legmagasabb liga. Tartsd meg a helyed!"),
         el("span", { class: "timer-note" }, icon("clock"), fmtLeft(left) + " van hátra")));
     if (mode === "bots") {
-      if (NET.mode === "server") {
-        root.append(el("div", { class: "offline-note" }, icon("info"), el("div", { style: "display:flex;flex-direction:column;gap:10px;align-items:flex-start" },
-          el("p", null, NET.uid ? "Most gépi ellenfelekkel versenyzel. Csatlakozz az osztályodhoz, és a társaiddal mérheted össze a heti XP-det!" : "Most gépi ellenfelekkel versenyzel. Hozz létre fiókot, és csatlakozz az osztályodhoz, hogy a társaiddal versenyezz!"),
-          el("button", { class: "btn blue sm", type: "button", onclick: () => go("profile") }, NET.uid ? "Csatlakozás osztályhoz" : "Fiók létrehozása"))));
-      } else root.append(offlineNote("Offline módban gépi ellenfelekkel versenyzel. A kodkigyo.hu-n fiókkal az osztályoddal, a claude.ai-on megnyitott Kódkígyóban más játékosokkal versenyezhetsz."));
+      if (NET.mode === "server" && !NET.token) {
+        const card = accountCard();
+        card.querySelector("h3").textContent = "Versenyezz a többiekkel!";
+        card.querySelector("p").textContent = "Most gépi ellenfelekkel versenyzel. Hozz létre fiókot, és bekerülsz a közös online ligába a többi Kódkígyó-tanuló közé. Csak egy becenév kell, e-mail cím nem. Ne a teljes neved add meg!";
+        root.append(card);
+      } else if (NET.mode === "server") root.append(offlineNote("Most nem érjük el a szervert, ezért gépi ellenfeleket látsz. Ha visszajön a kapcsolat, az online ligád jelenik meg."));
+      else root.append(offlineNote("Offline módban gépi ellenfelekkel versenyzel. A kodkigyo.hu-n egy fiókkal a többi tanulóval versenyezhetsz."));
     }
-    if (mode !== "bots" && rows.length < 2) root.append(offlineNote(mode === "class" ? "Még csak te gyűjtöttél XP-t az osztályban ezen a héten. Szólj a társaidnak!" : "Még csak te vagy ebben a ligában. Hívd meg a barátaidat, és versenyezzetek!"));
+    if (mode === "server" && !grouped) root.append(offlineNote("Teljesíts egy leckét ezen a héten, és bekerülsz egy legfeljebb 30 fős csoportba a(z) " + L.name + " ligában. A csoport többi tagja is ezen a héten tanuló diák."));
+    else if (mode !== "bots" && rows.length < 2) root.append(offlineNote("Egyelőre csak te vagy a csoportodban. Ahogy mások is tanulnak a héten, ők is ide kerülnek."));
     root.append(el("section", { class: "card", style: "padding:10px" }, boardRows(rows, lg)));
-    if (state.weekXp === 0) root.append(el("p", { class: "note", style: "text-align:center" }, "Teljesíts egy leckét, és már gyűjtöd is a heti XP-t."));
+    if (mode === "server" && NET.cls) {
+      const crows = NET.cls.members.map((m) => {
+        if (m.id === NET.uid) return meEntry(state.weekXp);
+        const p = NET.players.get(m.id) || cleanPlayer(m);
+        return { id: m.id, name: p.nick, online: true, xp: p.weekKey === state.weekKey ? p.weekXp : 0, streak: liveOf(p) };
+      }).sort((a, b) => b.xp - a.xp || (a.isMe ? -1 : b.isMe ? 1 : 0));
+      root.append(el("section", { class: "card" },
+        el("div", { class: "card-head" }, el("h3", null, NET.cls.name), el("span", { class: "pill" }, icon("users"), "Osztályrangsor")),
+        el("p", { class: "muted small" }, "Az osztályod heti XP-rangsora. A ligádat nem befolyásolja, csak megmutatja, ki tanult a legtöbbet a héten."),
+        boardRows(crows, lg, 0, true)));
+    }
+    if (state.weekXp === 0 && mode !== "server") root.append(el("p", { class: "note", style: "text-align:center" }, "Teljesíts egy leckét, és már gyűjtöd is a heti XP-t."));
     return root;
   }
 
@@ -2338,19 +2629,18 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function questRow(q, i, opts) {
     opts = opts || {};
     const ready = q.prog >= q.goal && !q.claimed;
-    const chest = el("button", { class: "q-chest" + (ready ? " ready" : q.claimed ? " claimed" : ""), type: "button", "aria-label": ready ? "Jutalom: " + q.reward + " drágakő, kinyitom" : q.claimed ? "Átvéve" : "Jutalom: " + q.reward + " drágakő", disabled: !ready && !opts.live },
+    const ct = CHEST_TIERS[questChest(q)];
+    const chest = el("button", { class: "q-chest" + (ready ? " ready" : q.claimed ? " claimed" : ""), type: "button", style: q.claimed ? null : "color:" + ct.c2,
+      "aria-label": ready ? ct.name + ", kinyitom" : q.claimed ? "Átvéve" : "Jutalom: " + ct.name, disabled: !ready && !opts.live },
       icon(q.claimed ? "chestOpen" : "chest"));
     chest.addEventListener("click", () => {
       if (!(q.prog >= q.goal && !q.claimed)) return;
-      const got = claimQuest(i);
-      sfx("chest");
-      gemBurst(chest);
+      const r = claimQuest(i);
+      if (!r) return;
       chest.className = "q-chest claimed";
+      chest.style.color = "";
       chest.replaceChildren(icon("chestOpen"));
-      toast("+" + got + " drágakő!");
-      renderChips();
-      renderNav();
-      if (!S) renderRail();
+      openChestFx(r, () => { renderChips(); renderNav(); if (!S) renderRail(); });
     });
     const frac = (opts.from != null ? opts.from : q.prog) / q.goal;
     const bar = pbar(frac, Math.min(q.prog, q.goal) + " / " + q.goal);
@@ -2372,7 +2662,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("section", { class: "month-card" },
         icon("medal", "month-badge"),
         el("div", null, el("span", { class: "eyebrow" }, "Havi kihívás"), el("h3", null, mName.charAt(0).toUpperCase() + mName.slice(1) + "i jelvény"),
-          el("p", { class: "small" }, m.done ? "Megszerezted! A jelvény a profilodon látható." : "Teljesíts " + MONTH_GOAL + " napi küldetést ebben a hónapban. Jutalom: jelvény és 50 drágakő."),
+          el("p", { class: "small" }, m.done ? "Megszerezted! A jelvény a profilodon látható." : "Teljesíts " + MONTH_GOAL + " napi küldetést ebben a hónapban. Jutalom: jelvény és " + MONTH_GEMS + " drágakő."),
           pbar(Math.min(1, m.n / MONTH_GOAL), Math.min(m.n, MONTH_GOAL) + " / " + MONTH_GOAL, "var(--sun)"))),
       daily);
     if (state.badges.length) {
@@ -2522,11 +2812,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function accountCard() {
     const nick = el("input", { class: "search", id: "accNick", maxlength: "20", placeholder: "Becenév, pl. Kódmester", autocomplete: "off", value: prefs.nick || "", "aria-label": "Becenév" });
     const msg = el("p", { class: "note", "aria-live": "polite" });
-    const go1 = (e) => busy(e.currentTarget, msg, async () => { await createAccount(nick.value); sfx("coin"); render(); toast("Kész a fiókod! Most már követhetsz barátokat."); });
+    const go1 = (e) => busy(e.currentTarget, msg, async () => { await createAccount(nick.value); sfx("coin"); render(); toast("Kész a fiókod! Mostantól az online ligában versenyzel."); });
     nick.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); nick.nextSibling && nick.parentNode.querySelector("button").click(); } });
     return el("section", { class: "card account-card" },
-      el("div", { class: "card-head" }, el("h3", null, "Barátok és osztályliga")),
-      el("p", { class: "muted small" }, "Hozz létre fiókot, és követheted a barátaidat, vagy csatlakozhatsz az osztályodhoz. Csak becenevet kérünk, e-mail címet nem. Ne a teljes neved add meg!"),
+      el("div", { class: "card-head" }, el("h3", null, "Online liga és barátok")),
+      el("p", { class: "muted small" }, "Hozz létre fiókot: bekerülsz a közös online ligába, követheted a barátaidat, csatlakozhatsz az osztályodhoz, és a haladásod minden eszközödön megmarad. Csak becenevet kérünk, e-mail címet nem. Ne a teljes neved add meg!"),
       el("div", { class: "row" }, nick, el("button", { class: "btn blue", type: "button", onclick: go1 }, "Fiók létrehozása")),
       msg,
       el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"));
@@ -2551,7 +2841,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       btn.addEventListener("click", () => busy(btn, msg, async () => { await classJoin(code.value); sfx("coin"); render(); toast("Beléptél az osztályba: " + NET.cls.name); }));
       code.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); btn.click(); } });
       card.append(el("div", { class: "card-head" }, el("h3", null, "Osztály")),
-        el("p", { class: "muted small" }, "Írd be a tanárodtól kapott osztálykódot, és a társaiddal versenyezhetsz az osztályligában."),
+        el("p", { class: "muted small" }, "Írd be a tanárodtól kapott osztálykódot, és a Liga fülön az osztályod heti rangsorát is látod."),
         el("div", { class: "row" }, code, btn), msg,
         el("button", { class: "link", type: "button", onclick: createClassSheet }, "Tanár vagy? Hozz létre osztályt"));
       return card;
@@ -2561,12 +2851,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     card.append(el("div", { class: "card-head" }, el("h3", null, c.name), el("span", { class: "pill" }, icon("users"), c.members.length + " fő")),
       el("div", { class: "code-box" }, el("span", { class: "muted" }, "Osztálykód:"), codeEl,
         el("button", { class: "btn ghost sm", type: "button", style: "margin-left:auto", onclick: () => copyText(c.code, codeEl) }, icon("copy"), "Másolás")),
-      el("p", { class: "note" }, owner ? "Te hoztad létre ezt az osztályt. Oszd meg a kódot a diákjaiddal. Ha valakire koppintasz, el is távolíthatod." : "Az osztályligában a társaiddal versenyzel. A heti ranglistát a Liga fülön látod."));
+      el("p", { class: "note" }, owner ? "Te hoztad létre ezt az osztályt. Oszd meg a kódot a diákjaiddal. Ha valakire koppintasz, el is távolíthatod." : "Az osztályod heti rangsorát a Liga fülön látod."));
     const list = el("div");
     c.members.filter((m) => m.id !== NET.uid).forEach((m) => { const p = NET.players.get(m.id); if (p) list.append(friendRow(m.id, p)); });
     if (!list.childNodes.length) list.append(el("p", { class: "note" }, "Még nincs más tag. Oszd meg az osztálykódot!"));
     card.append(list, el("div", { class: "row", style: "margin-top:12px" },
-      el("button", { class: "btn ghost sm", type: "button", onclick: () => go("league") }, icon("shield"), "Osztályliga"),
+      el("button", { class: "btn ghost sm", type: "button", onclick: () => go("league") }, icon("shield"), "Osztályrangsor"),
       el("button", { class: "btn ghost sm", type: "button", onclick: confirmLeaveClass }, "Kilépés az osztályból")));
     fillNames(list);
     return card;
@@ -2705,15 +2995,15 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("A haladásodat (XP, széria, leckeeredmények, drágakövek, küldetések, eredmények, az elrontott feladatok listája) és a beállításaidat (hang, téma, napi cél, becenév) csak a saját böngésződ tárolja. Ezek az adatok nem jutnak el hozzánk, és harmadik félhez sem."),
         p("A Kódkígyó nem használ analitikát, hirdetést vagy követőkódot. A betűtípusokat és a hangokat maga az oldal tartalmazza, így megnyitáskor semmit nem tölt be külső szolgáltatótól."),
         p("A weboldalt a tárhelyszolgáltató (", val(LEGAL.host, "tárhelyszolgáltató neve"), ") szolgálja ki. A kérések kiszolgálásához és a támadások kiszűréséhez kezeli az IP-címedet és a böngésződ technikai adatait, a saját ", ext("https://www.cloudflare.com/privacypolicy/", "adatvédelmi szabályzata"), " szerint."),
-        el("h3", null, "Ha fiókot hozol létre (barátok és osztályliga)"),
+        el("h3", null, "Ha fiókot hozol létre (online liga, barátok, osztály)"),
         p("A fiókhoz csak becenevet kérünk: e-mail címet, jelszót vagy valódi nevet nem. A fiók adatait a Cloudflare D1 adatbázisában, az Európai Unió területén tároljuk:"),
         ul("a beceneved és a barátkódod;",
           "a belépőkódod, de csak visszafejthetetlen (hash) formában;",
           "a játékstatisztikáid: összes XP, heti XP az elmúlt 8 hétre, széria, liga, a teljesített leckék és eredmények száma, Tekla kinézete és a csatlakozás dátuma;",
-          "kiket követsz, és melyik osztály tagja vagy;",
+          "kiket követsz, melyik osztály tagja vagy, és melyik heti ligacsoportba kerültél;",
           "a haladásod mentése, amelyet csak te látsz;",
           "a jelentések, ha te jelentesz valakit, vagy téged jelentenek."),
-        p("A becenevedet és a statisztikáidat a barátaid, a követőid és az osztálytársaid látják. Az osztály létrehozója, általában a tanár, látja az osztály tagjait, és eltávolíthat valakit az osztályból."),
+        p("A becenevedet és a statisztikáidat látják: a heti ligacsoportod tagjai (hetente legfeljebb 30, a ligád szerint összesorolt játékos), a barátaid, a követőid és az osztálytársaid. Az osztály létrehozója, általában a tanár, látja az osztály tagjait, és eltávolíthat valakit az osztályból."),
         p("Az IP-címedet nem tároljuk. A regisztrációk számának korlátozásához legfeljebb egy óráig egy belőle képzett, visszafejthetetlen kódot (hash) őrzünk."),
         p("A fiókot addig őrizzük, amíg nem törlöd. Ha 12 hónapig nem használod, automatikusan töröljük. A heti XP-adatokat 8 hétig, a jelentéseket 90 napig őrizzük. A Cloudflare adatfeldolgozóként, a szerződési feltételei szerint kezeli az adatokat."),
         el("h3", null, "Ha a Kódkígyót a claude.ai-on használod"),
@@ -2722,7 +3012,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           "a nyilvános játékprofilodat, amelyet a Kódkígyó többi felhasználója is lát: összes és heti XP, széria, liga, a teljesített leckék és eredmények száma, a barátkódod, kiket követsz, mikor csatlakoztál és Tekla kinézete."),
         p("A neved és a profilképed a claude.ai-fiókodból jelenik meg a többieknek, ezeket a Kódkígyó nem tárolja. A claude.ai használatára az Anthropic feltételei és ", ext("https://www.anthropic.com/legal/privacy", "adatvédelmi tájékoztatója"), " vonatkozik."),
         el("h3", null, "Cél és jogalap"),
-        p("Az online adatkezelés célja a játék működtetése: a haladás mentése, a barátok, az osztályliga és a ranglista. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont)."),
+        p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont)."),
         el("h3", null, "A jogaid"),
         p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A helyben tárolt adatokat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
         p("Panasszal a Nemzeti Adatvédelmi és Információszabadság Hatósághoz fordulhatsz (1055 Budapest, Falk Miksa utca 9–11., ", ext("https://naih.hu", "naih.hu"), "), illetve bírósághoz."),
@@ -2741,8 +3031,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A tanuláshoz nem kell fiók, és nincs benne valódi pénzért vásárolható tartalom.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",
           "A tananyagot gondosan állítottuk össze, és minden kódpéldát lefuttattunk Pythonnal, de hiba így is előfordulhat. Ha találsz egyet, jelezd itt: " + (LEGAL.email || "[e-mail cím]") + ".",
-          "Ha nem vagy osztályban, a ligában a többi versenyző kitalált nevű gépi ellenfél, nem valódi ember.",
-          "A barátaid és az osztálytársaid láthatják a becenevedet és a játékstatisztikáidat. A becenév nem lehet sértő vagy megtévesztő, és ne használd a Kódkígyót mások zaklatására. A szabályokat sértő fiókot az üzemeltető törölheti, az osztály létrehozója pedig eltávolíthat tagot az osztályból.",
+          "Fiókkal a közös online ligában valódi játékosokkal versenyzel. Fiók nélkül, vagy ha nincs kapcsolat a szerverrel, a ligában a többi versenyző kitalált nevű gépi ellenfél, nem valódi ember.",
+          "A ligacsoportod tagjai, a barátaid és az osztálytársaid láthatják a becenevedet és a játékstatisztikáidat. A becenév nem lehet sértő vagy megtévesztő, és ne használd a Kódkígyót mások zaklatására. A szabályokat sértő fiókot az üzemeltető törölheti, az osztály létrehozója pedig eltávolíthat tagot az osztályból.",
           "A belépőkódodra te vigyázol. Aki ismeri, be tud lépni a fiókodba, ezért senkinek ne add meg.",
           "Az alkalmazást jelenlegi állapotában biztosítjuk. A jogszabályok által megengedett mértékben nem vállalunk felelősséget a használatából eredő károkért.",
           "A feltételek változhatnak, a változásokat ezen az oldalon tesszük közzé. A feltételekre a magyar jog irányadó.")),
@@ -2964,7 +3254,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const msg = el("p", { class: "note", "aria-live": "polite" });
       const b = el("button", { class: "btn ghost sm", type: "button" }, "Mentés");
       b.addEventListener("click", () => busy(b, msg, async () => { await renameNick(inp.value); b.disabled = false; render(); toast("Az új beceneved: " + myName()); }));
-      nickBlock = el("div", { style: "display:flex;flex-direction:column;gap:6px" }, el("b", null, "Becenév"), el("span", { class: "small muted" }, "A barátaid és az osztálytársaid ezt látják."), el("div", { class: "row" }, inp, b), msg);
+      nickBlock = el("div", { style: "display:flex;flex-direction:column;gap:6px" }, el("b", null, "Becenév"), el("span", { class: "small muted" }, "A ligád, a barátaid és az osztálytársaid ezt látják."), el("div", { class: "row" }, inp, b), msg);
     } else if (!(NET.mode === "claude" && NET.me && NET.me.name)) {
       const nick = el("input", { class: "search", id: "nickInput", maxlength: "24", value: prefs.nick || "", placeholder: "Pl. Kata", autocomplete: "off" });
       nick.addEventListener("change", () => { prefs.nick = nick.value.trim().slice(0, 24); savePrefs(); render(); });
@@ -3003,13 +3293,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     openSheet(null, tekla("sad"), el("h3", { id: "sheetTitle" }, "Biztosan törlöd?"), el("p", { class: "meta" }, "A teljes haladásod elvész, és nem lehet visszaállítani."),
       el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"),
-        el("button", { class: "btn bad", type: "button", onclick: () => { const code = state.code, follows = state.follows; state = fresh(); state.code = code; state.follows = follows; prefs.chapter = null; save(); savePrefs(); applySkin(); closeSheet(); go("learn"); toast("A haladásod törölve."); } }, "Törlés")));
+        el("button", { class: "btn bad", type: "button", onclick: () => { const code = state.code, follows = state.follows; state = fresh(); state.code = code; state.follows = follows; state.epoch = Date.now(); prefs.chapter = null; save(); savePrefs(); applySkin(); closeSheet(); go("learn"); toast("A haladásod törölve."); } }, "Törlés")));
     sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
   }
   function showNotices() {
     if (S || !sheet.hidden || !state.notices.length) return;
     const n = state.notices.shift();
-    save();
+    save(true);
     if (n.type === "frozen") {
       sfx("freeze");
       openSheet(null, el("div", { class: "streak-hero" }, icon("flameIce", "flame-big"), el("div", null, el("b", { id: "sheetTitle", style: "color:var(--ice)" }, n.streak + " nap"), el("span", { class: "muted" }, "A szériád biztonságban van."))),
@@ -3571,9 +3861,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const boosted = boostActive();
     const gained = base ? addXp(base) : 0;
     const streak = extendStreak();
-    let gems = { lesson: 5, exam: 15, legendary: 10, jump: 10, practice: 3, mistakes: 3 }[mode] || 0;
-    if (timed) gems = Math.min(10, Math.floor(S.correct / 2));
-    if (perfect) gems += 3;
+    let gems = { lesson: 2, exam: 10, legendary: 5, jump: 5, practice: 1, mistakes: 1 }[mode] || 0;
+    if (timed) gems = Math.min(5, Math.floor(S.correct / 4));
+    if (perfect) gems += 2;
     addGems(gems);
     const firstTime = L && !isDone(S.i);
     if (mode === "lesson" || mode === "exam" || mode === "legendary") {
@@ -3723,6 +4013,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     window.scrollTo(0, 0);
     if (homeFx) playHomeFx(homeFx);
     setTimeout(showNotices, 400);
+    if (NET.pendingRemote) { const r = NET.pendingRemote; NET.pendingRemote = null; if (remoteWins(r, state)) takeServerState(r); }
   }
   // Lecke után: az XP felpörög, és az újonnan megnyílt állomás lakatja lepattan.
   function playHomeFx(f) {
@@ -3837,6 +4128,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     syncHearts();
     settleStreak();
     const hasRuntime = !!(window.claude && typeof window.claude.use === "function");
+    // A fiókot már a kapcsolódás előtt ismerjük, hogy a hetet ne a gépi ellenfelek alapján zárjuk le.
+    if (!hasRuntime) { try { NET.token = localStorage.getItem(ACCOUNT_KEY); } catch (e) {} }
     const hashView = (location.hash || "").slice(1);
     const fromHash = { tanulas: "learn", gyakorlas: "practice", liga: "league", kuldetesek: "quests", bolt: "shop", profil: "profile" }[hashView];
     if (["jogi", "impresszum", "adatvedelem", "sutik", "feltetelek"].includes(hashView)) openLegal(hashView === "jogi" ? null : hashView);
