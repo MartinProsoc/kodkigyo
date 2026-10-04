@@ -1,4 +1,14 @@
-<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>Kódkígyó</title>
+<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kódkígyó – tanulj Pythont játékosan</title>
+<meta name="description" content="Tanulj Pythont játékosan, magyarul! Rövid leckék, azonnali visszajelzés, napi széria és ligák Teklával, a kódoló kígyóval. Ingyenes, regisztráció nélkül is használható.">
+<meta name="theme-color" content="#F2F6F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1512" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kódkígyó">
+<meta property="og:title" content="Kódkígyó – tanulj Pythont játékosan">
+<meta property="og:description" content="Rövid leckék, napi széria és ligák Teklával, a kódoló kígyóval. Ingyenes, magyar nyelvű Python-tanulás.">
+<meta property="og:locale" content="hu_HU">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='28 6 60 60'%3E%3Cellipse cx='58' cy='37' rx='28' ry='24' fill='%231C8A5D'/%3E%3Cellipse cx='58' cy='36' rx='27' ry='22.5' fill='%232FB37E'/%3E%3Cellipse cx='58' cy='47' rx='17' ry='9.5' fill='%23F6D66B'/%3E%3Ccircle cx='46.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='48' cy='32' r='4.8' fill='%2311241E'/%3E%3Ccircle cx='69.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='71' cy='32' r='4.8' fill='%2311241E'/%3E%3Cpath d='M52 46.5q6 5 12 0' fill='none' stroke='%2311241E' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Layout: nav rail left · learning path center · stats rail right. Phones: top stat bar + bottom tab bar.
    Identity: tactile 3D game UI, Python blue + yellow accents on leaf-tinted neutrals; the path is Tekla's own body. */
@@ -746,6 +756,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 </style>
+</head>
+<body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12.6 1.8c.5 3.2 2.3 4.9 3.9 6.8 1.5 1.8 2.5 3.5 2.5 6a7 7 0 0 1-14 0c0-2.6 1.1-4.4 2.6-5.8.3 1.6 1 2.8 2.2 3.4-.4-3.6.6-7.2 2.8-10.4z"/><path fill="var(--sun)" d="M12.4 12c.3 1.6 1.2 2.4 1.9 3.3.6.8 1 1.6 1 2.6a3.3 3.3 0 0 1-6.6 0c0-1.5.8-2.5 1.6-3.2.1.8.5 1.4 1.1 1.7-.2-1.6.2-3.2 1-4.4z"/></symbol>
   <symbol id="i-flameIce" viewBox="0 0 24 24"><path fill="var(--ice)" d="M12.6 1.8c.5 3.2 2.3 4.9 3.9 6.8 1.5 1.8 2.5 3.5 2.5 6a7 7 0 0 1-14 0c0-2.6 1.1-4.4 2.6-5.8.3 1.6 1 2.8 2.2 3.4-.4-3.6.6-7.2 2.8-10.4z"/><path fill="var(--ice-soft)" d="M12.4 12c.3 1.6 1.2 2.4 1.9 3.3.6.8 1 1.6 1 2.6a3.3 3.3 0 0 1-6.6 0c0-1.5.8-2.5 1.6-3.2.1.8.5 1.4 1.1 1.7-.2-1.6.2-3.2 1-4.4z"/></symbol>
@@ -909,7 +921,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // ===================== Tunables =====================
   const STORE_KEY = "kodkigyo-progress-v1";
   const PREF_KEY = "kodkigyo-prefs-v1";
-  const INFINITE_HEARTS = true; // Teszteléshez: a szívek nem fogynak el. Élesben állítsd false-ra.
+  const INFINITE_HEARTS = false; // true: a szívek nem fogynak el (csak teszteléshez)
   const HEART_MAX = 5;
   const HEART_MS = 60 * 60 * 1000; // ennyi idő alatt töltődik vissza egy szív
   const FREEZE_MAX = 2;
