@@ -897,6 +897,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // Amíg egy mező üres, a Jogi tudnivalók oldalon jól látható „kitöltendő” jelölés áll a helyén.
   const LEGAL = {
     operator: "Szabó Martin", // az üzemeltető (és adatkezelő) neve: magánszemély vagy cég
+    status: "magánszemély", // az impresszumban a név után zárójelben: magánszemély, egyéni vállalkozó, cég
     address: "",    // lakcím vagy székhely; üresen nem jelenik meg (ingyenes, nem üzleti oldalnál elhagyható)
     email: "kodkigyosupport@gmail.com", // kapcsolattartási e-mail cím
     phone: "",      // telefonszám (elhagyható)
@@ -2680,7 +2681,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       sec("impresszum", "Impresszum",
         p("A Kódkígyó ingyenes, oktatási célú webes alkalmazás a Python programozási nyelv tanulásához."),
         el("dl", null,
-          kv("Üzemeltető", val(LEGAL.operator, "üzemeltető neve")),
+          kv("Üzemeltető", LEGAL.operator ? LEGAL.operator + (LEGAL.status ? " (" + LEGAL.status + ")" : "") : todo("üzemeltető neve")),
           LEGAL.address ? kv("Cím", LEGAL.address) : null,
           kv("E-mail", contact()),
           LEGAL.phone ? kv("Telefon", LEGAL.phone) : null,
