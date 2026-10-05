@@ -388,6 +388,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 @keyframes cfRise{from{transform:translateY(16px);opacity:0}}
 .cf-fly{position:absolute;left:0;top:0;z-index:5;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;color:#A68CFF;filter:drop-shadow(0 0 8px rgba(166,140,255,.85))}
 .cf-fly .ic{width:100%;height:100%}
+.kept{width:min(360px,100%)}
 .swatches{display:flex;gap:6px;margin-top:8px}
 .swatches i{width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.08)}
 /* Tesztpanel (csak az üzemeltetőnek) */
@@ -1173,6 +1174,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       freezes: 0, gems: START_GEMS, hearts: HEART_MAX, heartTs: 0, boostUntil: 0, lostStreak: null, quests: null, monthly: null,
       badges: [], ach: {}, mistakes: {}, stats: freshStats(), goal: 30, joined: today(), code: newCode(), follows: [],
       league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0, epoch: 0,
+      paused: null, // megszakított lecke: innen folytatható (lásd pauseSession)
     };
   }
   function normalize(o) {
@@ -1184,7 +1186,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     for (const k of ["best", "done", "legend", "chests", "daily", "ach", "mistakes"]) if (o[k] && typeof o[k] === "object" && !Array.isArray(o[k])) s[k] = { ...o[k] };
     for (const k of ["frozen", "badges", "follows", "skins", "notices"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
     if (o.stats && typeof o.stats === "object") s.stats = { ...freshStats(), ...o.stats };
-    for (const k of ["quests", "monthly", "lostStreak", "prevWeek"]) if (o[k] && typeof o[k] === "object") s[k] = JSON.parse(JSON.stringify(o[k]));
+    for (const k of ["quests", "monthly", "lostStreak", "prevWeek", "paused"]) if (o[k] && typeof o[k] === "object") s[k] = JSON.parse(JSON.stringify(o[k]));
     if (!o.v) {
       // v1 mentés: csak XP, széria, csillagok és teljesítések voltak benne.
       s.stats.lessons = Object.values(s.done).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -2343,11 +2345,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       let k = 0;
       LESSONS.forEach((l, i) => {
         if (l.unit !== u.id) return;
-        const done = isDone(i), open = isUnlocked(i), current = i === cur, legend = !!state.legend[l.id];
+        const done = isDone(i), open = isUnlocked(i), current = i === cur, legend = !!state.legend[l.id], paused = !!pausedFor(i);
         const cls = "node" + (l.exam ? " exam" : "") + (done ? " done" : "") + (legend ? " legend" : "") + (!open ? " locked" : "") + (current ? " current" : "");
         const label = l.title + (done ? ", teljesítve" : !open ? ", zárva" : current ? ", következő lecke" : "");
         list.append(el("li", { class: "node-wrap", style: "--x:" + OFFSETS[k++ % OFFSETS.length] },
-          current ? el("span", { class: "start-tip" }, state.xp === 0 ? "Kezdés" : "Tovább") : null,
+          current || paused ? el("span", { class: "start-tip" }, paused ? "Folytatás" : state.xp === 0 ? "Kezdés" : "Tovább") : null,
           el("button", { class: cls, type: "button", "data-i": i, "aria-label": label, onclick: (e) => { e.stopPropagation(); openNodePop(i, e.currentTarget); } },
             icon(!open ? (l.exam ? "trophy" : "lock") : legend ? "goldsnake" : l.icon)),
           el("span", { class: "node-label" }, l.title),
@@ -2421,6 +2423,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       pop.append(el("p", null, desc));
       if (done) pop.append(el("div", { class: "row", style: "align-items:center;gap:8px" }, starsRow(state.best[l.id] || 0), el("span", { class: "small" }, legend ? "Aranykígyó-szint" : "Legjobb eredményed")));
       const row = el("div", { class: "row" });
+      const p = pausedFor(i);
+      if (p) {
+        pop.append(pbar(p.correct / p.total, p.correct + " / " + p.total + " feladat kész"));
+        row.append(el("button", { class: "btn on-color", type: "button", onclick: () => startSession({ mode: p.mode, i }) }, "Folytatás"),
+          el("button", { class: "btn ghost sm", type: "button", onclick: () => startSession({ mode: l.exam ? "exam" : "lesson", i, fresh: true }) }, "Elölről"));
+      } else
       row.append(el("button", { class: "btn on-color", type: "button", onclick: () => startSession({ mode: l.exam ? "exam" : "lesson", i }) }, done ? "Ismétlés +" + xp + " XP" : "Kezdés +" + xp + " XP"));
       if (done && !l.exam && !legend) {
         row.append(el("button", { class: "btn legend", type: "button", title: "Oldd meg legfeljebb 2 hibával, és aranyba fordul az állomás", onclick: () => startLegendary(i) }, icon("goldsnake"), "Aranykígyó", el("span", { class: "price" }, icon("gem"), PRICE.legendary)));
@@ -3616,6 +3624,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("p", { class: "meta" }, "A " + n.n + " napos szériád véget ért. A boltban 2 napig visszaállíthatod széria-javítással, vagy kezdj ma egy újat!"),
         el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => { closeSheet(); go("shop"); } }, "Javítás a boltban"), el("button", { class: "btn", type: "button", onclick: closeSheet }, "Új szériát kezdek")));
       sheetIn.querySelector(".tekla").style.cssText = "width:96px;height:96px";
+    } else if (n.type === "resume") {
+      const p = state.paused && pausedFor(state.paused.i);
+      if (!p || heartsNow() <= 0) { showNotices(); return; }
+      const L = LESSONS[p.i];
+      openSheet(unitStyle(L.unit), tekla("happy"), el("h3", { id: "sheetTitle" }, "Folytatod a leckét?"),
+        el("p", { class: "meta" }, "Van újra szíved. A(z) „" + L.title + "” leckét onnan folytatod, ahol abbahagytad."),
+        pbar(p.correct / p.total, p.correct + " / " + p.total + " feladat kész"),
+        el("div", { class: "row" },
+          el("button", { class: "btn ghost", type: "button", onclick: closeSheet }, "Később"),
+          el("button", { class: "btn", type: "button", style: "background:var(--uc);box-shadow:0 4px 0 var(--ucd)", onclick: () => startSession({ mode: p.mode, i: p.i }) }, "Folytatás")));
+      sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
     } else if (n.type === "league") {
       const L = LEAGUES[n.to];
       if (n.res === "up") { sfx("win"); setTimeout(() => fx.confetti(), 200); }
@@ -3654,14 +3673,35 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function snapshotQuests() { ensureQuests(); return state.quests.list.map((q) => q.prog); }
 
+  // ---------- Megszakított lecke ----------
+  // Ha egy leckében elfogynak a szívek, vagy a játékos kilép, a lecke nem vész el: elmentjük, hol tartott,
+  // és legközelebb onnan folytatható. Egyszerre egy megszakított lecke lehet.
+  function pausedFor(i) {
+    const p = state.paused, L = LESSONS[i];
+    if (!p || p.i !== i || !L || (p.mode !== "lesson" && p.mode !== "exam") || !Array.isArray(p.queue) || p.pos >= p.queue.length) return null;
+    // Ha közben változott a tananyag, a mentés már nem használható.
+    return p.queue.every((q) => (q.k === "tip" ? !!L.tips[q.ti] : !!EX_BY_KEY[q.key])) ? p : null;
+  }
+  function pauseSession(pos) {
+    if (!S || !S.L || (S.mode !== "lesson" && S.mode !== "exam")) return;
+    state.paused = {
+      mode: S.mode, i: S.i, pos, total: S.total, correct: S.correct, answeredN: S.answeredN, firstRight: S.firstRight,
+      mistakes: S.mistakes, maxCombo: S.maxCombo, xpBefore: S.xpBefore, at: Date.now(),
+      queue: S.queue.map((q) => (q.kind === "tip" ? { k: "tip", ti: S.L.tips.indexOf(q.t) } : { k: "ex", key: q.ex.key, first: q.first })),
+    };
+  }
+
   function startSession(cfg) {
     closeSheet();
     closePop();
     const M = MODES[cfg.mode];
     if (M.hearts && heartsNow() <= 0) { heartsSheet(); return; }
     const L = cfg.i != null ? LESSONS[cfg.i] : null;
+    if (cfg.fresh && state.paused && state.paused.i === cfg.i) { state.paused = null; save(); }
+    const P = M.hearts && L ? pausedFor(cfg.i) : null;
     let exs = [], tips = [];
-    if (cfg.mode === "lesson") { exs = L.ex.slice(); tips = L.tips; }
+    if (P) exs = [null]; // a folytatott lecke sorát lent, a mentésből állítjuk vissza
+    else if (cfg.mode === "lesson") { exs = L.ex.slice(); tips = L.tips; }
     else if (cfg.mode === "exam") { exs = examPool(L.scope === "all" ? LESSONS.filter((l) => !l.exam) : lessonsOfChapter(L.scope).filter((l) => !l.exam), L.count); tips = L.tips; }
     else if (cfg.mode === "practice") exs = shuffle(poolFromDone().flatMap((l) => l.ex)).slice(0, 10);
     else if (cfg.mode === "mistakes") exs = Object.entries(state.mistakes).sort((a, b) => b[1] - a[1]).map(([k]) => EX_BY_KEY[k]).filter(Boolean).slice(0, 10);
@@ -3680,6 +3720,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       queue: [...tips.map((t) => ({ kind: "tip", t })), ...exs.map((ex) => ({ kind: "ex", ex, first: true }))],
       questsBefore: snapshotQuests(), xpBefore: state.xp, returnView: prefs.view, post: [],
     };
+    if (P) {
+      Object.assign(S, {
+        queue: P.queue.map((q) => (q.k === "tip" ? { kind: "tip", t: L.tips[q.ti] } : { kind: "ex", ex: EX_BY_KEY[q.key], first: q.first })),
+        pos: P.pos, total: P.total, correct: P.correct, answeredN: P.answeredN, firstRight: P.firstRight, mistakes: P.mistakes,
+        maxCombo: P.maxCombo, xpBefore: P.xpBefore, touched: true, resumed: true,
+      });
+    }
     appEl.hidden = true;
     tabbar.hidden = true;
     lessonEl.hidden = false;
@@ -4183,6 +4230,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (mode === "legendary") state.legend[L.id] = true;
     if (mode === "practice" || mode === "mistakes" || timed) { state.stats.practice++; questEvent("practice", 1); }
     if (mode === "practice" && !INFINITE_HEARTS) gainHearts(1);
+    // A befejezett lecke mentése törlődik; gyakorlás után felajánljuk a megszakított lecke folytatását.
+    if ((mode === "lesson" || mode === "exam") && state.paused && state.paused.i === S.i) state.paused = null;
+    if (mode === "practice" && state.paused && heartsNow() > 0 && !state.notices.some((n) => n.type === "resume")) state.notices.push({ type: "resume" });
     if (timed) state.stats.timedBest = Math.max(state.stats.timedBest, S.correct);
     let unlock = null;
     if (mode === "jump") {
@@ -4290,16 +4340,37 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     actBtn.focus({ preventScroll: true });
   }
 
+  // Feltöltés után ugyanott megy tovább a lecke, ahol a szívek elfogytak.
+  function continueAfterRefill() {
+    S.hearts = heartsNow();
+    S.failed = false;
+    S.failKind = null;
+    state.paused = null;
+    save();
+    sfx("coin");
+    $("lTop").hidden = false;
+    updateHearts(false);
+    setCombo(false);
+    S.pos++;
+    if (S.pos >= S.queue.length) finish(); else showStep();
+  }
   function showFail(kind) {
     clearInterval(timerInt);
     stage.classList.remove("leaving");
     $("combo").replaceChildren();
     const hearts = kind === "hearts";
+    // Elfogyott szívnél a lecke nem vész el: elmentjük, és onnan folytatható, ahol abbahagyta.
+    if (hearts) { pauseSession(S.pos + 1); save(); }
+    const kept = hearts && state.paused;
     stage.replaceChildren(el("div", { class: "l-inner result fail", style: "animation:none" },
       tekla("sad"),
       el("h2", null, hearts ? "Elfogytak a szívek" : "Túl sok hiba"),
-      el("p", { class: "note", style: "font-size:17px;max-width:420px" }, hearts ? "Semmi baj, a hibákból tanulunk! Tölts fel szíveket, gyakorolj egyet, vagy várj, amíg visszatöltődnek." : "Ez most nem jött össze, de bármikor újrapróbálhatod.")));
-    if (hearts) setFoot("fail", state.gems >= PRICE.refill ? { act: "Feltöltés · " + PRICE.refill + " drágakő", cls: "gem" } : { act: "Gyakorlás +1 szív", cls: "good" });
+      kept ? el("div", { class: "kept" }, pbar(S.correct / S.total, S.correct + " / " + S.total + " feladat kész")) : null,
+      el("p", { class: "note", style: "font-size:17px;max-width:420px" }, kept
+        ? "Semmi baj, a haladásod megmaradt! Ha újra lesz szíved, innen folytatod, nem kell elölről kezdened. Következő szív " + fmtLeft(nextHeartMs()) + " múlva, vagy gyakorolj egyet érte."
+        : hearts ? "Semmi baj, a hibákból tanulunk! Tölts fel szíveket, gyakorolj egyet, vagy várj, amíg visszatöltődnek."
+        : "Ez most nem jött össze, de bármikor újrapróbálhatod.")));
+    if (hearts) setFoot("fail", state.gems >= PRICE.refill ? { act: "Feltöltés és folytatás · " + PRICE.refill + " drágakő", cls: "gem" } : { act: "Gyakorlás +1 szív", cls: "good" });
     else setFoot("fail", { act: "Újrapróbálom", cls: "good" });
     S.failKind = kind;
     sfx("lose");
@@ -4358,13 +4429,18 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       closeLesson();
       return;
     }
+    // Leckéből és vizsgából kilépve a haladás megmarad, onnan folytatható; a gyakorlásoké elvész.
+    const keeps = (S.mode === "lesson" || S.mode === "exam") && S.correct > 0;
     openSheet(lessonEl.getAttribute("style"),
-      tekla("sad"),
+      tekla(keeps ? "" : "sad"),
       el("h3", { id: "sheetTitle" }, "Biztos kilépsz?"),
-      el("p", { class: "meta" }, "Ha most kilépsz, ennek a" + (S.mode === "lesson" ? " leckének" : "z alkalomnak") + " a haladása elvész."),
+      el("p", { class: "meta" }, keeps ? "Nem vész el semmi: legközelebb onnan folytatod, ahol most abbahagyod." : "Ha most kilépsz, ennek a" + (S.mode === "lesson" ? " leckének" : "z alkalomnak") + " a haladása elvész."),
       el("div", { class: "row" },
         el("button", { class: "btn", type: "button", onclick: closeSheet }, "Folytatom"),
-        el("button", { class: "btn ghost", type: "button", onclick: () => { closeSheet(); closeLesson(); } }, "Kilépek")));
+        el("button", { class: "btn ghost", type: "button", onclick: () => {
+          if (keeps) { pauseSession(S.answered ? S.pos + 1 : S.pos); save(); }
+          closeSheet(); closeLesson();
+        } }, "Kilépek")));
     sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
   }
 
@@ -4376,7 +4452,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     else if (footMode === "fail") {
       const cfg = { mode: S.mode, i: S.i, chapter: S.chapter };
       if (S.failKind === "hearts") {
-        if (state.gems >= PRICE.refill) { spend(PRICE.refill); state.hearts = HEART_MAX; save(); sfx("coin"); startSession(cfg); }
+        if (state.gems >= PRICE.refill) { spend(PRICE.refill); state.hearts = HEART_MAX; continueAfterRefill(); }
         else startSession({ mode: "practice" });
       } else startSession(cfg);
     }
