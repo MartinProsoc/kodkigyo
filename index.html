@@ -388,6 +388,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 @keyframes cfRise{from{transform:translateY(16px);opacity:0}}
 .cf-fly{position:absolute;left:0;top:0;z-index:5;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;color:#A68CFF;filter:drop-shadow(0 0 8px rgba(166,140,255,.85))}
 .cf-fly .ic{width:100%;height:100%}
+/* Tesztpanel (csak az üzemeltetőnek) */
+.dev-sec{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:2px solid var(--line)}
+.dev-sec>b{display:flex;justify-content:space-between;gap:8px}
+.dev-sec>b small{font-weight:600;color:var(--ink-soft)}
+.dev-row{display:flex;flex-wrap:wrap;gap:8px}
+.dev-row .btn{flex:0 0 auto}
+.dev-chest{color:var(--dc) !important;border-color:var(--dc) !important}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .month-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:linear-gradient(135deg,var(--gem),var(--blue));color:var(--on-color);border-radius:22px;padding:18px;box-shadow:0 5px 0 var(--gem-deep)}
 .month-badge{width:76px;height:84px;color:var(--sun)}
@@ -3100,8 +3107,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("p", { class: "muted" }, "Csatlakozott: " + fmtJoined(state.joined) + (online() ? "" : NET.mode === "server" ? " · Fiók nélkül" : " · Offline mód")),
         online() ? el("div", { class: "follow-counts" }, el("span", null, el("b", null, state.follows.length), " követett"), el("span", null, el("b", null, followers().length), " követő")) : null));
     const root = el("div", { class: "view" },
-      el("div", { class: "view-head", style: "flex-direction:row;align-items:center;justify-content:space-between" }, el("h1", null, "Profil"),
-        el("button", { class: "btn ghost sm", type: "button", onclick: settingsSheet }, icon("gear"), "Beállítások")),
+      el("div", { class: "view-head", style: "flex-direction:row;align-items:center;justify-content:space-between;gap:8px" }, el("h1", null, "Profil"),
+        el("div", { style: "display:flex;gap:8px" },
+          devMode() ? el("button", { class: "btn ghost sm", type: "button", id: "devBtn", onclick: devPanel }, icon("bolt"), "Teszt") : null,
+          el("button", { class: "btn ghost sm", type: "button", onclick: settingsSheet }, icon("gear"), "Beállítások"))),
       head);
     if (online()) {
       const codeEl = el("code", null, state.code);
@@ -3453,6 +3462,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       server ? row("Fiókom törlése", "A becenév, a statisztikák, a követések és az online mentés.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés"))
         : NET.mode === "claude" && online() ? row("Online adataim törlése", "A nyilvános játékprofilod és az online mentésed.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés")) : null,
       row("Jogi tudnivalók", "Impresszum, adatvédelem, sütik, feltételek", el("button", { class: "btn ghost sm", type: "button", onclick: () => openLegal() }, "Megnyitás")),
+      devMode() ? row("Tesztpanel", "Csak neked látszik: drágakövek, ládák, széria, értesítések.", el("button", { class: "btn ghost sm", type: "button", onclick: devPanel }, "Megnyitás")) : null,
       el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Kész"));
   }
   function confirmOnlineDelete() {
@@ -3478,6 +3488,71 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("button", { class: "btn bad", type: "button", onclick: () => { const code = state.code, follows = state.follows; state = fresh(); state.code = code; state.follows = follows; state.epoch = Date.now(); prefs.chapter = null; save(); savePrefs(); applySkin(); closeSheet(); go("learn"); toast("A haladásod törölve."); } }, "Törlés")));
     sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
   }
+
+  // ---------- Tesztpanel ----------
+  // Csak az üzemeltető fiókjában (a szerver jelzi: me.admin), illetve helyben (fájlként, localhoston) jelenik meg.
+  // A saját mentést módosítja; a ligában versenyző heti XP-hez nem nyúl.
+  function devMode() {
+    if (location.protocol === "file:" || location.hostname === "localhost" || location.hostname === "127.0.0.1") return true;
+    return NET.mode === "server" && !!(NET.me && NET.me.admin);
+  }
+  let devLuck = "random"; // a tesztládák fejlődése: "random", "always" vagy "never"
+  function devChest(base) {
+    const path = [base];
+    let t = base;
+    for (let k = 1; k < CHEST_TAPS; k++) {
+      const up = devLuck === "always" || (devLuck === "random" && Math.random() < CHEST_UP[t]);
+      if (up && t < CHEST_TIERS.length - 1) t++;
+      path.push(t);
+    }
+    const T = CHEST_TIERS[t];
+    const r = { path, tier: t, gems: T.gems[0] + Math.floor(Math.random() * (T.gems[1] - T.gems[0] + 1)), boost: !!T.boost };
+    grantChest(r);
+    save();
+    closeSheet();
+    openChestFx(r, () => { render(); devPanel(); });
+  }
+  function devStreak(n) {
+    for (let i = 0; i < n; i++) { const k = addDays(today(), -i); state.daily[k] = Math.max(state.daily[k] || 0, 10); }
+    state.streak = n;
+    state.lastDay = today();
+    state.bestStreak = Math.max(state.bestStreak, n);
+    state.lostStreak = null;
+  }
+  function devPanel() {
+    // Újrarajzoláskor a panel ott marad, ahol a gombot megnyomta.
+    const keep = (fn) => () => { const y = sheet.scrollTop; fn(); devPanel(); sheet.scrollTop = y; };
+    const act = (label, fn, msg) => el("button", { class: "btn ghost sm", type: "button", onclick: keep(() => { fn(); save(); render(); sfx("coin"); if (msg) toast(msg); }) }, label);
+    const notice = (label, n) => el("button", { class: "btn ghost sm", type: "button", onclick: () => { closeSheet(); state.notices.push(n); showNotices(); } }, label);
+    const sec = (title, now, ...kids) => el("div", { class: "dev-sec" }, el("b", null, title, now != null ? el("small", null, now) : null), ...kids);
+    const row = (...btns) => el("div", { class: "dev-row" }, ...btns);
+    const lg = state.league;
+    openSheet(null,
+      el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
+      el("h3", { id: "sheetTitle" }, "Tesztpanel"),
+      el("p", { class: "meta" }, "Kipróbálhatod vele a játék részeit. A saját mentésedet módosítja, a ligában versenyző heti XP-hez nem nyúl."),
+      sec("Drágakövek", "most " + state.gems, row(act("+50", () => addGems(50)), act("+500", () => addGems(500)), act("Nullázás", () => { state.gems = 0; }))),
+      sec("Szívek", "most " + heartsNow() + "/" + HEART_MAX, row(act("Feltöltés", () => { state.hearts = HEART_MAX; }), act("Elfogyasztás", () => { state.hearts = 0; state.heartTs = Date.now(); }))),
+      sec("Láda kinyitása", "a jutalmat meg is kapod",
+        row(...CHEST_TIERS.map((t, i) => el("button", { class: "btn ghost sm dev-chest", type: "button", style: "--dc:" + t.c2, onclick: () => devChest(i) }, icon("chest"), t.short))),
+        el("div", { class: "seg" }, [["random", "Véletlen fejlődés"], ["always", "Mindig fejlődik"], ["never", "Nem fejlődik"]].map(([v, label]) =>
+          el("button", { type: "button", "aria-pressed": String(devLuck === v), onclick: keep(() => { devLuck = v; }) }, label)))),
+      sec("Napi küldetések", null, row(
+        act("Mind kész", () => { ensureQuests(); state.quests.list.forEach((q) => { q.prog = q.goal; q.claimed = false; }); }, "Kész! A ládákat a Küldetések fülön nyithatod ki."),
+        act("Visszaállítás", () => { ensureQuests(); state.quests.list.forEach((q) => { q.prog = 0; q.claimed = false; }); }))),
+      sec("Széria", "most " + liveStreak() + " nap · " + state.freezes + "/" + FREEZE_MAX + " befagyasztó", row(
+        act("+1 nap", () => devStreak(liveStreak() + 1)), act("7 nap", () => devStreak(7)), act("30 nap", () => devStreak(30)),
+        act("+1 befagyasztó", () => { state.freezes = Math.min(FREEZE_MAX, state.freezes + 1); }))),
+      sec("Dupla XP", boostActive() ? "aktív" : "nincs", row(act("+15 perc", () => { state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS; }))),
+      sec("Tananyag", null, row(act("Minden lecke feloldása", () => { LESSONS.forEach((l) => { if (!state.done[l.id]) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 3; } }); }))),
+      sec("Értesítések kipróbálása", "csak megjelenik, nem változtat semmit", row(
+        notice("Feljutás", { type: "league", rank: 1, res: "up", from: lg, to: Math.min(LEAGUES.length - 1, lg + 1), reward: LEAGUE_REWARDS[0] }),
+        notice("Kiesés", { type: "league", rank: 27, res: "down", from: lg, to: Math.max(0, lg - 1), reward: 0 }),
+        notice("Befagyasztó", { type: "frozen", n: 1, streak: Math.max(liveStreak(), 5) }),
+        notice("Megszakadt széria", { type: "lost", n: Math.max(liveStreak(), 12) }))),
+      el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Kész"));
+  }
+
   function showNotices() {
     if (S || !sheet.hidden || !state.notices.length) return;
     const n = state.notices.shift();

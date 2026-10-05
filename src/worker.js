@@ -103,6 +103,10 @@ async function authenticate(req, env) {
   return p;
 }
 
+// Az üzemeltető fiókja(i) (wrangler.jsonc: vars.ADMIN_IDS). Nekik az app tesztpanelt mutat;
+// ez csak a felületet nyitja meg, a szerveren semmilyen többletjogot nem ad.
+const isAdmin = (env, id) => String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(id);
+
 // Nyilvános profil: ennyit lát egy játékosról a barátja vagy az osztálytársa.
 function publicProfile(p, weekXp, wk) {
   return {
@@ -160,7 +164,7 @@ async function social(p, env) {
   try { lastResult = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
   return json({
     week: wk,
-    me: { ...publicProfile(p, mine ? mine.xp : 0, wk), code: p.code, classId: p.class_id, lastResult },
+    me: { ...publicProfile(p, mine ? mine.xp : 0, wk), code: p.code, classId: p.class_id, lastResult, admin: isAdmin(env, p.id) },
     following: following.map((r) => publicProfile(r, r.wxp, wk)),
     followers: followers.map((r) => publicProfile(r, r.wxp, wk)),
     class: cls,

@@ -3,7 +3,7 @@
   "name": "kodkigyo",
   "main": "src/worker.js",
   "compatibility_date": "2025-10-01",
-  // A kodkigyo.html-t a build lépés másolja a public/ mappába index.html néven.
+  // Az index.html-t a build lépés másolja a public/ mappába, a biztonsági fejlécekkel együtt.
   "build": { "command": "node scripts/prepare.mjs" },
   "assets": { "directory": "./public", "binding": "ASSETS" },
   // Ne legyen minden verziónak külön nyilvános címe, csak az éles oldal.
@@ -17,7 +17,9 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Óránként lezárja a véget ért heteket az osztályligákban, és törli a lejárt adatokat.
+  // Az üzemeltető fiókazonosítója(i) vesszővel elválasztva: nekik az app tesztpanelt mutat (Profil › Teszt).
+  "vars": { "ADMIN_IDS": "54Z52J8H" },
+  // Óránként lezárja a véget ért heti ligacsoportokat, és törli a lejárt adatokat.
   "triggers": { "crons": ["7 * * * *"] }
   // Saját domainhez (miután a kodkigyo.hu a Cloudflare-en van), vedd ki a megjegyzésből:
   // , "routes": [{ "pattern": "kodkigyo.hu", "custom_domain": true }]
