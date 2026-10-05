@@ -120,7 +120,8 @@ async function register(req, env) {
   const body = await readJson(req);
   const nick = cleanName(body.nick, 2, 20, "becenév");
   const ip = req.headers.get("cf-connecting-ip") || "local";
-  await rateLimit(env, "reg:" + (await sha256("kodkigyo:" + ip)).slice(0, 24), 20, 3600000);
+  // Egy iskola minden gépe gyakran ugyanazon az IP-címen van, ezért egy egész évfolyamnyi regisztrációt engedünk óránként.
+  await rateLimit(env, "reg:" + (await sha256("kodkigyo:" + ip)).slice(0, 24), 150, 3600000);
   const secret = randomCode(16), hash = await sha256(secret), now = Date.now();
   for (let attempt = 0; attempt < 5; attempt++) {
     const id = randomCode(8), code = randomCode(6);
@@ -414,8 +415,9 @@ async function hourly(env) {
     env.DB.prepare("DELETE FROM rate WHERE reset_at < ?").bind(now),
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?").bind(now - 90 * DAY),
   ]);
-  // 12 hónapja inaktív fiókok törlése.
-  const stale = (await env.DB.prepare("SELECT * FROM players WHERE updated_at < ? LIMIT 50").bind(now - 365 * DAY).all()).results || [];
+  // 12 hónapja inaktív fiókok, és a 30 napja nem használt, XP nélküli (csak kipróbált) fiókok törlése.
+  const stale = (await env.DB.prepare("SELECT * FROM players WHERE updated_at < ?1 OR (xp = 0 AND updated_at < ?2) LIMIT 50")
+    .bind(now - 365 * DAY, now - 30 * DAY).all()).results || [];
   for (const p of stale) await deleteAccount(p, env);
 }
 

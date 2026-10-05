@@ -389,6 +389,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .cf-fly{position:absolute;left:0;top:0;z-index:5;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;color:#A68CFF;filter:drop-shadow(0 0 8px rgba(166,140,255,.85))}
 .cf-fly .ic{width:100%;height:100%}
 .kept{width:min(360px,100%)}
+/* Kötelező fiók: üdvözlő képernyő */
+.gate{position:fixed;inset:0;z-index:38;overflow-y:auto;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px));animation:fadeIn .25s}
+.gate-in{width:min(440px,100%);display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;margin:auto}
+.gate .tekla{width:136px;height:136px}
+.gate h1{font-size:clamp(28px,7.5vw,38px)}
+.gate-lead{font-size:17px;color:var(--ink-soft)}
+.gate form{width:100%;display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.gate input{width:100%;text-align:center;font-size:18px}
+.gate .fine{font-size:13px;color:var(--ink-soft);line-height:1.5}
+.gate .fine .link{font-size:13px;padding:0;min-height:0}
+.gate-back{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .swatches{display:flex;gap:6px;margin-top:8px}
 .swatches i{width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.08)}
 /* Tesztpanel (csak az üzemeltetőnek) */
@@ -982,7 +993,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     phone: "",      // telefonszám (elhagyható)
     registry: "",   // cég vagy egyéni vállalkozó esetén: cégjegyzék- vagy nyilvántartási szám, adószám
     host: "Cloudflare, Inc., 101 Townsend St., San Francisco, CA 94107, USA", // tárhelyszolgáltató
-    updated: "2026. október 4.",
+    updated: "2026. október 5.",
   };
 
   // ===================== Tunables =====================
@@ -2130,6 +2141,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     try { localStorage.removeItem(ACCOUNT_KEY); } catch (e) {}
     state.follows = [];
     saveLocal();
+    syncGate(); // fiók nélkül újra az üdvözlő képernyő jön
   }
   async function renameNick(nick) { await api("PUT", "me", { nick }); await refreshSocial(); }
   async function classCreate(name) { await api("POST", "class", { name }); await refreshSocial(); }
@@ -2230,6 +2242,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     renderRail();
     if (prefs.view === "learn") requestAnimationFrame(drawSnakes);
     animateBars(document.body);
+    syncGate();
   }
   function renderSocial() {
     if (S) return;
@@ -3156,6 +3169,62 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("button", { class: "btn bad", type: "button", onclick: () => { forgetAccount(); closeSheet(); render(); toast("Kijelentkeztél ezen az eszközön."); } }, "Kijelentkezés")));
   }
 
+  // ---------- Kötelező fiók: üdvözlő képernyő ----------
+  // A kodkigyo.hu-n a játékhoz fiók kell, ehhez egy becenév elég. Ha a szerver nem érhető el, vagy a
+  // Kódkígyót fájlként nyitják meg, fiók nélkül, offline módban indul, és legközelebb kéri a becenevet.
+  let gateEl = null, gatePending = false; // gatePending: indulás, még nem tudjuk, elérhető-e a szerver
+  function needGate() { return (NET.mode === "server" || gatePending) && !NET.token; }
+  function syncGate() {
+    const want = needGate() && prefs.view !== "legal";
+    if (want && !gateEl) openGate();
+    else if (!want && gateEl) closeGate();
+    if (gateEl) {
+      const b = gateEl.querySelector(".gate-go");
+      if (!b.dataset.busy) { b.disabled = NET.mode !== "server"; b.textContent = NET.mode === "server" ? "Kezdjük!" : "Kapcsolódás…"; }
+    }
+  }
+  function openGate() {
+    const nick = el("input", { class: "search", id: "gateNick", maxlength: "20", placeholder: "Beceneved, pl. Kódmester", autocomplete: "off", spellcheck: "false", "aria-label": "Becenév", value: prefs.nick || "" });
+    const msg = el("p", { class: "note", "aria-live": "polite" });
+    const goBtn = el("button", { class: "btn wide gate-go", type: "submit" }, "Kezdjük!");
+    const form = el("form", { novalidate: true }, nick, el("p", { class: "fine" }, "Becenevet adj meg, ne a teljes neved. Ezt látják a többiek a ligában."), msg, goBtn);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (NET.mode !== "server" || goBtn.dataset.busy) return;
+      goBtn.dataset.busy = "1";
+      busy(goBtn, msg, () => createAccount(nick.value)).then((ok) => {
+        delete goBtn.dataset.busy;
+        if (!ok) { nick.focus(); return; }
+        closeGate();
+        render();
+        sfx("win");
+        fx.confetti();
+        toast("Szia, " + myName() + "! Kezdjük az első leckével!");
+        setTimeout(showNotices, 900);
+      });
+    });
+    const legal = (id, text) => el("button", { class: "link", type: "button", onclick: () => openLegal(id) }, text);
+    gateEl = el("div", { class: "gate", role: "dialog", "aria-modal": "true", "aria-labelledby": "gateTitle" },
+      el("div", { class: "gate-in" },
+        poke(tekla("happy")),
+        el("h1", { id: "gateTitle" }, "Szia! Én Tekla vagyok."),
+        el("p", { class: "gate-lead" }, "Együtt tanulunk Pythont, kis lépésekben. Hogy szólíthatlak?"),
+        form,
+        el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"),
+        el("p", { class: "fine" }, "A folytatással elfogadod a ", legal("feltetelek", "felhasználási feltételeket"), ", és tudomásul veszed az ", legal("adatvedelem", "adatkezelési tájékoztatót"), ".")));
+    document.body.append(gateEl);
+    appEl.inert = true;
+    tabbar.inert = true;
+    requestAnimationFrame(() => { if (gateEl && sheet.hidden) nick.focus({ preventScroll: true }); });
+  }
+  function closeGate() {
+    if (!gateEl) return;
+    gateEl.remove();
+    gateEl = null;
+    appEl.inert = false;
+    tabbar.inert = false;
+  }
+
   function renderProfile() {
     const st = liveStreak();
     const head = el("section", { class: "card prof-head" }, avatarEl({ isMe: true }, null, "lg"),
@@ -3224,6 +3293,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       ["JetBrains Mono", "Copyright 2020 The JetBrains Mono Project Authors"],
     ];
     return el("div", { class: "view legal" },
+      needGate() ? el("section", { class: "card gate-back" }, el("span", null, "Ha elolvastad, folytathatod a regisztrációt."),
+        el("button", { class: "btn sm", type: "button", onclick: () => go("learn") }, "Vissza")) : null,
       el("div", { class: "view-head" }, el("h1", null, "Jogi tudnivalók"), el("p", null, "Utoljára frissítve: " + LEGAL.updated)),
       el("nav", { class: "legal-nav", "aria-label": "Részek" }, LEGAL_SECTIONS.map(([id, label]) =>
         el("button", { class: "chip", type: "button", onclick: () => $("jogi-" + id).scrollIntoView({ block: "start", behavior: REDUCED ? "auto" : "smooth" }) }, label))),
@@ -3238,12 +3309,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           kv("Tárhelyszolgáltató", val(LEGAL.host, "tárhelyszolgáltató neve és címe")))),
       sec("adatvedelem", "Adatkezelési tájékoztató",
         p("Adatkezelő: ", val(LEGAL.operator, "üzemeltető neve"), ". Kapcsolat: ", contact(), "."),
-        el("h3", null, "Ha fiók nélkül, a saját eszközödön használod"),
-        p("A haladásodat (XP, széria, leckeeredmények, drágakövek, küldetések, eredmények, az elrontott feladatok listája) és a beállításaidat (hang, téma, napi cél, becenév) csak a saját böngésződ tárolja. Ezek az adatok nem jutnak el hozzánk, és harmadik félhez sem."),
+        el("h3", null, "A saját eszközödön tárolt adatok"),
+        p("A haladásod (XP, széria, leckeeredmények, drágakövek, küldetések, eredmények, az elrontott feladatok listája) egy példányát és a beállításaidat (hang, téma, napi cél) a saját böngésződ is tárolja, hogy a Kódkígyó gyorsan és kapcsolat nélkül is működjön. Ha a szerver épp nem érhető el, vagy a Kódkígyót fájlként nyitod meg, fiók nélkül, offline módban is tanulhatsz: ilyenkor az adataid csak a böngésződben vannak, és nem jutnak el hozzánk."),
         p("A Kódkígyó nem használ analitikát, hirdetést vagy követőkódot. A betűtípusokat és a hangokat maga az oldal tartalmazza, így megnyitáskor semmit nem tölt be külső szolgáltatótól."),
         p("A weboldalt a tárhelyszolgáltató (", val(LEGAL.host, "tárhelyszolgáltató neve"), ") szolgálja ki. A kérések kiszolgálásához és a támadások kiszűréséhez kezeli az IP-címedet és a böngésződ technikai adatait, a saját ", ext("https://www.cloudflare.com/privacypolicy/", "adatvédelmi szabályzata"), " szerint."),
-        el("h3", null, "Ha fiókot hozol létre (online liga, barátok, osztály)"),
-        p("A fiókhoz csak becenevet kérünk: e-mail címet, jelszót vagy valódi nevet nem. A fiók adatait a Cloudflare D1 adatbázisában, az Európai Unió területén tároljuk:"),
+        el("h3", null, "A fiókod"),
+        p("A kodkigyo.hu használatához fiók kell, de csak egy becenevet kérünk hozzá: e-mail címet, jelszót vagy valódi nevet nem. A fiók adatait a Cloudflare D1 adatbázisában, az Európai Unió területén tároljuk:"),
         ul("a beceneved és a barátkódod;",
           "a belépőkódod, de csak visszafejthetetlen (hash) formában;",
           "a játékstatisztikáid: összes XP, heti XP az elmúlt 8 hétre, széria, liga, a teljesített leckék és eredmények száma, Tekla kinézete és a csatlakozás dátuma;",
@@ -3252,7 +3323,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           "a jelentések, ha te jelentesz valakit, vagy téged jelentenek."),
         p("A becenevedet és a statisztikáidat látják: a heti ligacsoportod tagjai (hetente legfeljebb 30, a ligád szerint összesorolt játékos), a barátaid, a követőid és az osztálytársaid. Az osztály létrehozója, általában a tanár, látja az osztály tagjait, és eltávolíthat valakit az osztályból."),
         p("Az IP-címedet nem tároljuk. A regisztrációk számának korlátozásához legfeljebb egy óráig egy belőle képzett, visszafejthetetlen kódot (hash) őrzünk."),
-        p("A fiókot addig őrizzük, amíg nem törlöd. Ha 12 hónapig nem használod, automatikusan töröljük. A heti XP-adatokat 8 hétig, a jelentéseket 90 napig őrizzük. A Cloudflare adatfeldolgozóként, a szerződési feltételei szerint kezeli az adatokat."),
+        p("A fiókot addig őrizzük, amíg nem törlöd. Ha 12 hónapig nem használod, automatikusan töröljük. Ha egy fiókkal egyetlen XP-t sem szereztél, és 30 napig nem nyitottad meg vele a Kódkígyót, azt is töröljük, hogy a csak kipróbált fiókok ne maradjanak meg. A heti XP-adatokat 8 hétig, a jelentéseket 90 napig őrizzük. A Cloudflare adatfeldolgozóként, a szerződési feltételei szerint kezeli az adatokat."),
         el("h3", null, "Ha a Kódkígyót a claude.ai-on használod"),
         p("A barátok és a ranglista miatt az online módban adatokat tárolunk az Anthropic (claude.ai) artifact-tárhelyén:"),
         ul("a haladásod mentését, amelyet csak te látsz;",
@@ -3264,7 +3335,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A helyben tárolt adatokat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
         p("Panasszal a Nemzeti Adatvédelmi és Információszabadság Hatósághoz fordulhatsz (1055 Budapest, Falk Miksa utca 9–11., ", ext("https://naih.hu", "naih.hu"), "), illetve bírósághoz."),
         el("h3", null, "Gyerekek"),
-        p("A Kódkígyót diákoknak készítettük. Fiók nélkül nem kér és nem küld el személyes adatot. A fiókhoz elég egy becenév: kérjük, ne a teljes neved add meg. A claude.ai-os online módhoz claude.ai-fiók kell, amelynek korhatárára az Anthropic feltételei vonatkoznak.")),
+        p("A Kódkígyót diákoknak készítettük, ezért a lehető legkevesebb adatot kérjük: a fiókhoz elég egy becenév. Kérjük, ne a teljes neved add meg, és semmi olyat, amiből kideríthető, ki vagy. A claude.ai-os online módhoz claude.ai-fiók kell, amelynek korhatárára az Anthropic feltételei vonatkoznak.")),
       sec("sutik", "Sütik és helyi tárolás",
         p("A Kódkígyó nem használ sütiket (cookie-kat). A böngésző helyi tárolójában (localStorage) legfeljebb három bejegyzést hoz létre, mert enélkül nem tudná megjegyezni a haladásodat:"),
         el("div", { class: "table-wrap" }, el("table", null,
@@ -3275,7 +3346,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
             el("tr", null, el("td", null, el("code", null, ACCOUNT_KEY)), el("td", null, "a fiókod belépőkulcsát, csak ha létrehoztál fiókot"), el("td", null, "amíg ki nem jelentkezel, vagy nem törlöd a fiókot"))))),
         p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével.")),
       sec("feltetelek", "Felhasználási feltételek",
-        ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A tanuláshoz nem kell fiók, és nincs benne valódi pénzért vásárolható tartalom.",
+        ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",
           "A tananyagot gondosan állítottuk össze, és minden kódpéldát lefuttattunk Pythonnal, de hiba így is előfordulhat. Ha találsz egyet, jelezd itt: " + (LEGAL.email || "[e-mail cím]") + ".",
           "Fiókkal a közös online ligában valódi játékosokkal versenyzel. Fiók nélkül, vagy ha nincs kapcsolat a szerverrel, a ligában a többi versenyző kitalált nevű gépi ellenfél, nem valódi ember.",
@@ -3611,7 +3682,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
 
   function showNotices() {
-    if (S || !sheet.hidden || !state.notices.length) return;
+    if (S || gateEl || !sheet.hidden || !state.notices.length) return;
     const n = state.notices.shift();
     save(true);
     if (n.type === "frozen") {
@@ -4512,6 +4583,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const hasRuntime = !!(window.claude && typeof window.claude.use === "function");
     // A fiókot már a kapcsolódás előtt ismerjük, hogy a hetet ne a gépi ellenfelek alapján zárjuk le.
     if (!hasRuntime) { try { NET.token = localStorage.getItem(ACCOUNT_KEY); } catch (e) {} }
+    // Fiók nélkül weboldalként rögtön az üdvözlő képernyő jön (amíg a szerver válaszol, „Kapcsolódás…”).
+    gatePending = !hasRuntime && /^https?:$/.test(location.protocol) && !NET.token;
     const hashView = (location.hash || "").slice(1);
     const fromHash = { tanulas: "learn", gyakorlas: "practice", liga: "league", kuldetesek: "quests", bolt: "shop", profil: "profile" }[hashView];
     if (["jogi", "impresszum", "adatvedelem", "sutik", "feltetelek"].includes(hashView)) openLegal(hashView === "jogi" ? null : hashView);
@@ -4520,6 +4593,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     setInterval(tick, 1000);
     // claude.ai-on az artifact futtatókörnyezete, saját domainen a Cloudflare Worker adja az online részt.
     (hasRuntime ? connectRemote() : connectServer()).then(() => {
+      gatePending = false;
+      syncGate();
       rollWeek(leagueMode());
       if (!S && !popOpen) render();
       if (!S) showNotices();
