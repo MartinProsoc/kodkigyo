@@ -2166,7 +2166,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           await new Promise((res) => { waiters.push(res); setTimeout(res, 20000); });
         }
         if (!token) throw new Error(failed === "load" ? "Nem sikerült betölteni a robotszűrőt. Ellenőrizd az internetet, és próbáld újra!"
-          : failed === "check" ? "A robotszűrő ellenőrzése nem sikerült. Frissítsd az oldalt, és próbáld újra!" : "Az ellenőrzés nem fejeződött be. Próbáld újra!");
+          : failed === "check" ? "A robotszűrő ellenőrzése nem sikerült. Frissítsd az oldalt, és próbáld újra!"
+          : box.classList.contains("ask") ? "Jelöld be a fenti ellenőrző mezőt, aztán próbáld újra!" : "Az ellenőrzés nem fejeződött be. Próbáld újra!");
         return token;
       },
       // Egy kód csak egyszer használható: sikertelen próbálkozás után újat kérünk.
