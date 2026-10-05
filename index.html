@@ -1205,6 +1205,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       badges: [], ach: {}, mistakes: {}, stats: freshStats(), goal: 30, joined: today(), code: newCode(), follows: [],
       league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0, epoch: 0,
       paused: null, // megszakított lecke: innen folytatható (lásd pauseSession)
+      owner: "", // a fiók azonosítója, amelyhez ez a mentés tartozik ("" = fiók nélkül, offline gyűjtött haladás)
     };
   }
   function normalize(o) {
@@ -1212,7 +1213,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (!o || typeof o !== "object") return s;
     const n = (k) => { if (Number.isFinite(o[k])) s[k] = o[k]; };
     ["xp", "streak", "bestStreak", "freezes", "gems", "hearts", "heartTs", "boostUntil", "goal", "league", "weekXp", "updatedAt", "epoch"].forEach(n);
-    for (const k of ["lastDay", "joined", "code", "weekKey", "skin", "seenResult"]) if (typeof o[k] === "string") s[k] = o[k];
+    for (const k of ["lastDay", "joined", "code", "weekKey", "skin", "seenResult", "owner"]) if (typeof o[k] === "string") s[k] = o[k];
     for (const k of ["best", "done", "legend", "chests", "daily", "ach", "mistakes"]) if (o[k] && typeof o[k] === "object" && !Array.isArray(o[k])) s[k] = { ...o[k] };
     for (const k of ["frozen", "badges", "follows", "skins", "notices"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
     if (o.stats && typeof o.stats === "object") s.stats = { ...freshStats(), ...o.stats };
@@ -1270,6 +1271,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return remote.updatedAt > local.updatedAt;
   }
   function adoptState(remote) {
+    // Ugyanannak a fióknak egy régebbi (tulajdonos nélküli) mentése: a tulajdonos marad.
+    if (!remote.owner) remote.owner = state.owner;
     state = remote;
     saveLocal();
     applySkin();
@@ -2074,10 +2077,25 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   async function loadAccount() {
     try {
       // Előbb a mentést egyeztetjük, csak utána jönnek a ligaeredmények és a statisztikák.
+      const id = NET.token.split(".")[0];
       const pr = await api("GET", "progress");
       const remote = pr && pr.data ? normalize(pr.data) : null;
-      if (remoteWins(remote, state)) adoptState(remote);
-      else await pushServerProgress();
+      let push = true;
+      if (state.owner && state.owner !== id) {
+        // Az itt maradt mentés egy másik fiókhoz tartozik (pl. kijelentkezés után): sosem keverjük bele.
+        // Ennek a fióknak a saját mentése jön, új fióknál pedig tiszta lap.
+        adoptState(remote || fresh());
+        prefs.chapter = null;
+        savePrefs();
+        push = !remote;
+      } else if (remoteWins(remote, state)) {
+        adoptState(remote);
+        push = false;
+      }
+      // Fiók nélkül gyűjtött haladás (owner üres) az első fiókhoz kerül, onnantól ahhoz tartozik.
+      state.owner = id;
+      saveLocal();
+      if (push) await pushServerProgress();
       await refreshSocial();
       NET.pulledAt = Date.now();
       publishPlayer(true);
@@ -2219,6 +2237,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     try { localStorage.removeItem(ACCOUNT_KEY); } catch (e) {}
     state.follows = [];
     saveLocal();
+    // Az üdvözlő képernyő ne az előző játékos becenevét ajánlja fel.
+    prefs.nick = "";
+    savePrefs();
     syncGate(); // fiók nélkül újra az üdvözlő képernyő jön
   }
   async function renameNick(nick) { await api("PUT", "me", { nick }); await refreshSocial(); }
@@ -2259,6 +2280,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       if (!NET.token) return false;
       try { await api("DELETE", "me"); } catch (e) { return false; }
       forgetAccount();
+      // A törölt fiók haladása erről az eszközről is törlődik, és egy új fiókba sem kerül át.
+      state = fresh();
+      prefs.chapter = null;
+      saveLocal();
+      savePrefs();
+      applySkin();
       return true;
     }
     if (!NET.db || !NET.uid) return false;
@@ -3245,11 +3272,15 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function confirmLogout() {
     const code = loginCode();
     openSheet(null, el("h3", { id: "sheetTitle" }, "Kijelentkezel ezen az eszközön?"),
-      el("p", { class: "meta" }, "A haladásod itt megmarad. A fiókodba csak a belépőkóddal tudsz visszalépni, ezért előbb mentsd el:"),
+      el("p", { class: "meta" }, "A haladásodat a fiókod őrzi. Visszalépni csak a belépőkóddal tudsz, ezért előbb mentsd el:"),
       el("div", { class: "code-box" }, el("code", { style: "font:600 16px/1.4 var(--f-mono);overflow-wrap:anywhere" }, code)),
       el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"),
-        el("button", { class: "btn bad", type: "button", onclick: () => { forgetAccount(); closeSheet(); render(); toast("Kijelentkeztél ezen az eszközön."); } }, "Kijelentkezés")));
+        el("button", { class: "btn bad", type: "button", onclick: (e) => busy(e.currentTarget, null, async () => {
+          // A még el nem küldött haladás előbb felmegy a fiókba.
+          await pushServerProgress();
+          forgetAccount(); closeSheet(); render(); toast("Kijelentkeztél ezen az eszközön.");
+        }) }, "Kijelentkezés")));
   }
 
   // ---------- Kötelező fiók: üdvözlő képernyő ----------
@@ -3680,7 +3711,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       nickBlock,
       server ? row("Belépőkód", "Ezzel léphetsz be másik eszközön.", el("button", { class: "btn ghost sm", type: "button", onclick: showLoginCode }, "Mutasd")) : null,
       server ? row("Kijelentkezés", "Ezen az eszközön. A haladásod itt marad.", el("button", { class: "btn ghost sm", type: "button", onclick: confirmLogout }, "Kijelentkezés")) : null,
-      row("Haladás törlése", "Minden XP, széria és jutalom elvész ezen az eszközön.", el("button", { class: "btn bad sm", type: "button", onclick: confirmReset }, "Törlés")),
+      row("Haladás törlése", NET.mode === "server" && NET.token ? "Minden XP, széria és jutalom elvész, a fiókodban és minden eszközödön." : "Minden XP, széria és jutalom elvész ezen az eszközön.", el("button", { class: "btn bad sm", type: "button", onclick: confirmReset }, "Törlés")),
       server ? row("Fiókom törlése", "A becenév, a statisztikák, a követések és az online mentés.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés"))
         : NET.mode === "claude" && online() ? row("Online adataim törlése", "A nyilvános játékprofilod és az online mentésed.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés")) : null,
       row("Jogi tudnivalók", "Impresszum, adatvédelem, sütik, feltételek", el("button", { class: "btn ghost sm", type: "button", onclick: () => openLegal() }, "Megnyitás")),
@@ -3699,7 +3730,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     });
     openSheet(null, el("h3", { id: "sheetTitle" }, server ? "Törlöd a fiókodat?" : "Törlöd az online adataidat?"),
       el("p", { class: "meta" }, server
-        ? "Végleg törlődik a beceneved, a statisztikáid, a követéseid, az osztálytagságod és az online mentésed. A barátaid listájáról is eltűnsz. Az ezen az eszközön tárolt haladásod megmarad."
+        ? "Végleg törlődik a beceneved, a statisztikáid, a követéseid, az osztálytagságod és a haladásod, ezen az eszközön is. A barátaid listájáról is eltűnsz. Ez nem vonható vissza."
         : "Törlődik a nyilvános játékprofilod, így a többiek nem látnak többé a ligában és a barátlistájukon, és törlődik az online mentésed is. Az ezen az eszközön tárolt haladásod megmarad."),
       el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"), btn));
   }
