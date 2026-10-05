@@ -3,6 +3,15 @@
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const SKINS = ["classic", "gold", "night", "coral", "ice"];
+// Tekla kiegészítői és helyük (ugyanaz, mint az appban az ACCS): helyenként legfeljebb egy lehet rajta.
+const ACCS = { bowtie: "neck", cap: "head", glasses: "face", shades: "face", headphones: "head", wizard: "head", crown: "head" };
+function cleanAcc(v) {
+  const out = [], slots = new Set();
+  for (const id of String(v || "").split(",").slice(0, 6)) {
+    if (ACCS[id] && !slots.has(ACCS[id])) { out.push(id); slots.add(ACCS[id]); }
+  }
+  return out.join(",");
+}
 const LEAGUE_MAX = 9;
 const MAX_BODY = 300000;
 const DAY = 86400000;
@@ -111,7 +120,7 @@ const isAdmin = (env, id) => String(env.ADMIN_IDS || "").split(",").map((s) => s
 function publicProfile(p, weekXp, wk) {
   return {
     id: p.id, nick: p.nick, xp: p.xp, streak: p.streak, bestStreak: p.best_streak, lastDay: p.last_day || "",
-    league: p.league, lessons: p.lessons, ach: p.ach, skin: p.skin, joined: dayKey(p.created_at), weekKey: wk, weekXp: weekXp || 0,
+    league: p.league, lessons: p.lessons, ach: p.ach, skin: p.skin, acc: p.acc || "", joined: dayKey(p.created_at), weekKey: wk, weekXp: weekXp || 0,
   };
 }
 
@@ -210,6 +219,7 @@ async function putMe(p, req, env) {
     sets.push("xp = ?", "streak = ?", "best_streak = ?", "last_day = ?", "lessons = ?", "ach = ?", "skin = ?", "stats_at = ?", "seeded = 1");
     binds.push(Math.max(xp, 0), int(s.streak, 5000), int(s.bestStreak, 5000), isDay(s.lastDay) ? s.lastDay : p.last_day,
       int(s.lessons, 500), int(s.ach, 1000), SKINS.includes(s.skin) ? s.skin : "classic", now);
+    if (typeof s.acc === "string") { sets.push("acc = ?"); binds.push(cleanAcc(s.acc)); }
     // A ligát mindig a szerver dönti el a heti zárásnál, az app által küldött értéket nem vesszük át.
     const wk = weekKey(now), prev = addDays(wk, -7);
     const weeks = [];

@@ -463,6 +463,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 /* ---------- Shop ---------- */
 .shop-sec{display:flex;flex-direction:column;gap:10px}
 .shop-sec h2{font-size:24px}
+.shop-note{font-size:14px;color:var(--ink-soft);margin:-4px 0 2px}
 .item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:16px;border:2px solid var(--line);border-radius:20px;background:var(--surface)}
 .item-art{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:var(--ia-bg,var(--surface-2));color:var(--ia,var(--brand))}
 .item-art .ic{width:34px;height:34px}
@@ -626,6 +627,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .q{font-family:var(--f-display);font-size:clamp(24px,5.6vw,31px)}
 .code{margin:0;background:var(--code-bg);color:var(--code-ink);border-radius:16px;padding:14px 16px;font:500 15.5px/1.65 var(--f-mono);white-space:pre;tab-size:4;overflow-x:auto}
 .code code{background:none;padding:0;font:inherit}
+.code,.bugline{text-shadow:var(--code-glow,none)}
+.code.code-mini{margin-top:8px;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;overflow:hidden}
 .c-kw{color:var(--code-kw);font-weight:600}.c-str{color:var(--code-str)}.c-num{color:var(--code-num)}.c-fn{color:var(--code-fn)}.c-com{color:var(--code-com);font-style:italic}
 .out{display:flex;flex-direction:column;gap:6px}
 .out-label{font:700 12px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -1022,8 +1025,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const HEART_MAX = 5;
   const HEART_MS = 60 * 60 * 1000; // ennyi idő alatt töltődik vissza egy szív
   const FREEZE_MAX = 2;
+  const SHIELD_MAX = 1; // hétvégi pajzs: egyszerre egy lehet nálad
   const BOOST_MS = 15 * 60 * 1000;
-  const PRICE = { freeze: 100, refill: 80, boost: 60, repair: 150, legendary: 30 };
+  const PRICE = { freeze: 100, refill: 80, boost: 60, repair: 150, legendary: 30, shield: 150 };
   const START_GEMS = 50;
   const MONTH_GOAL = 20;
   const GOALS = [{ xp: 10, name: "Laza" }, { xp: 20, name: "Rendszeres" }, { xp: 30, name: "Komoly" }, { xp: 50, name: "Elszánt" }];
@@ -1071,6 +1075,39 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       theme: { h: 43, light: ["#B47F06", "#8A6000", "#FBEFC9"], dark: ["#D99B16", "#A06F00", "#3A2E10"],
         units: [[28, 80, 42], [48, 85, 34], [15, 70, 38], [35, 55, 30], [22, 72, 37]] } },
   ];
+  const CLASSIC_C = ["#2FB37E", "#1C8A5D", "#F6D66B"]; // a klasszikus Tekla színei (másik játékos avatarjához)
+  // Tekla kiegészítői. Helyenként (fej, arc, nyak) egyszerre egy viselhető, a kígyók mellé bármelyik felvehető,
+  // és a többi játékos is látja őket. svg: rajz Tekla 120×120-as koordinátáiban; back: a fej mögé kerül (az áll alá).
+  const ACCS = [
+    { id: "bowtie", name: "Csokornyakkendő", slot: "neck", price: 100, back: true, text: "Elegáns piros csokor az áll alatt.",
+      svg: '<g transform="translate(66 63) rotate(-8)"><path d="M0 0-11.5-7Q-14 0-11.5 7Z" fill="#E5484D" stroke="#9E2A2F" stroke-width="1.6" stroke-linejoin="round"/><path d="M0 0 11.5-7Q14 0 11.5 7Z" fill="#E5484D" stroke="#9E2A2F" stroke-width="1.6" stroke-linejoin="round"/><circle cx="-6.5" cy="-1" r="1.2" fill="#fff" opacity=".85"/><circle cx="-8" cy="3" r="1.1" fill="#fff" opacity=".85"/><circle cx="7" cy="-1.5" r="1.2" fill="#fff" opacity=".85"/><circle cx="8" cy="3" r="1.1" fill="#fff" opacity=".85"/><rect x="-3.3" y="-3.8" width="6.6" height="7.6" rx="2.2" fill="#C2363C" stroke="#9E2A2F" stroke-width="1.4"/></g>' },
+    { id: "cap", name: "Baseballsapka", slot: "head", price: 150, text: "Python-kék sapka sárga csíkkal.",
+      svg: '<path d="M33 21Q33 3 58 3Q83 3 83 21Z" fill="#2F74C0" stroke="#1C4E87" stroke-width="2" stroke-linejoin="round"/><path d="M58 4V20M45 6.5Q47.5 13 46.5 20M71 6.5Q68.5 13 69.5 20" stroke="#1C4E87" stroke-width="1.3" fill="none" opacity=".55"/><path d="M34 18.5H82" stroke="#F5C518" stroke-width="3.2"/><path d="M66 19.5Q90 13 103 21Q89 27.5 66 23.5Z" fill="#245E9F" stroke="#1C4E87" stroke-width="2" stroke-linejoin="round"/><circle cx="58" cy="4" r="2.5" fill="#F5C518" stroke="#1C4E87" stroke-width="1.2"/>' },
+    { id: "glasses", name: "Kockaszemüveg", slot: "face", price: 200, text: "Az igazi programozók szemüvege.",
+      svg: '<g fill="rgba(190,225,255,.22)" stroke="#1D2A38" stroke-width="2.6"><rect x="35.6" y="21" width="21.6" height="19.5" rx="6"/><rect x="58.8" y="21" width="21.6" height="19.5" rx="6"/></g><path d="M57.2 28.5h1.6M35.6 27l-5-2M80.4 27l5-2" fill="none" stroke="#1D2A38" stroke-width="2.6" stroke-linecap="round"/><path d="M39.5 25.5l3.5-2.5M62.7 25.5l3.5-2.5" stroke="#fff" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round"/>' },
+    { id: "shades", name: "Napszemüveg", slot: "face", price: 250, text: "A legmenőbb kígyó a ligában.",
+      svg: '<path d="M34.5 23.5H57.5V31Q57.5 41.5 46.5 41.5Q35 41.5 34.5 31Z" fill="#14202B" stroke="#070C11" stroke-width="2" stroke-linejoin="round"/><path d="M58.5 23.5H81.5V31Q81 41.5 69.5 41.5Q58.5 41.5 58.5 31Z" fill="#14202B" stroke="#070C11" stroke-width="2" stroke-linejoin="round"/><path d="M57.5 25.5h1M34.5 25l-4.5-1.5M81.5 25l4.5-1.5" stroke="#070C11" stroke-width="2.4" stroke-linecap="round"/><path d="M38.5 31l5-4.5M62.5 31l5-4.5" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>' },
+    { id: "headphones", name: "Fejhallgató", slot: "head", price: 350, text: "Zene szól kódolás közben.",
+      svg: '<path d="M30 33Q30 5 58 5Q86 5 86 33" fill="none" stroke="#262B33" stroke-width="5.5" stroke-linecap="round"/><path d="M33 30Q34 8 58 8" fill="none" stroke="#5A6474" stroke-width="1.6" stroke-linecap="round"/><rect x="23.5" y="25" width="12" height="20" rx="5" fill="#FF7A45" stroke="#B4471C" stroke-width="2"/><rect x="80.5" y="25" width="12" height="20" rx="5" fill="#FF7A45" stroke="#B4471C" stroke-width="2"/><path d="M27 29v12M89 29v12" stroke="#fff" stroke-opacity=".45" stroke-width="2" stroke-linecap="round"/>' },
+    { id: "wizard", name: "Varázslósüveg", slot: "head", price: 450, text: "Python-varázsló csillagokkal.",
+      svg: '<path d="M37 16C46 11 58 4 74 1.6c2.2-.3 3.2 1 2.3 2.6L80 16Z" fill="#2F4FA8" stroke="#1B2F6B" stroke-width="2" stroke-linejoin="round"/><path d="M56 7.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="#F5C518"/><path d="M68 6l.7 1.5 1.6.2-1.2 1.1.3 1.6-1.4-.8-1.4.8.3-1.6-1.2-1.1 1.6-.2z" fill="#FFE27A"/><ellipse cx="58" cy="16.5" rx="31" ry="5" fill="#23408F" stroke="#1B2F6B" stroke-width="2"/>' },
+    { id: "crown", name: "Korona", slot: "head", price: 600, text: "Csak az igazi Királykobráknak.",
+      svg: '<path d="M40 18 38.5 6 48.5 11.5 58 3.5 67.5 11.5 77.5 6 76 18Z" fill="#F5C518" stroke="#B07C06" stroke-width="2" stroke-linejoin="round"/><rect x="39.5" y="14" width="37" height="5" rx="1.5" fill="#E3A90E" stroke="#B07C06" stroke-width="1.6"/><circle cx="58" cy="16.5" r="2.2" fill="#E5484D"/><circle cx="48" cy="16.5" r="1.8" fill="#2F74C0"/><circle cx="68" cy="16.5" r="1.8" fill="#12A07A"/><circle cx="38.5" cy="6" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/><circle cx="58" cy="3.5" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/><circle cx="77.5" cy="6" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/>' },
+  ];
+  // Kódtémák: a leckék kódblokkjainak színei. vars: --code-* értékek (bg, ink, kw, str, num, fn, com, slot, glow).
+  const CODE_THEMES = [
+    { id: "base", name: "Kódkígyó", price: 0, text: "Az alap téma, a kígyód színeihez igazodik.", vars: null },
+    { id: "retro", name: "Retro terminál", price: 200, text: "Zöld betűk fekete képernyőn, mint a régi gépeken.",
+      vars: { bg: "#040B06", ink: "#5CF08A", kw: "#C6FFB3", str: "#8DFFB0", num: "#E2FFB8", fn: "#A6FFD0", com: "#3FA562", slot: "rgba(92,240,138,.16)", glow: "0 0 7px rgba(92,240,138,.45)" } },
+    { id: "python", name: "Python-kék", price: 300, text: "A Python saját színei: kék és sárga.",
+      vars: { bg: "#13294B", ink: "#EAF2FF", kw: "#FFD43B", str: "#9ED5FF", num: "#FFB86B", fn: "#7FE3B5", com: "#8C9DBA", slot: "rgba(255,212,59,.16)" } },
+    { id: "neon", name: "Neon éjszaka", price: 300, text: "Rózsaszín, lila és citromsárga neonfények.",
+      vars: { bg: "#1E1B2E", ink: "#F2EEFF", kw: "#FF79C6", str: "#F1FA8C", num: "#BD93F9", fn: "#8BE9FD", com: "#8F88B0", slot: "rgba(255,121,198,.16)" } },
+    { id: "candy", name: "Cukorka", price: 400, text: "Világos, pasztell kódblokkok.",
+      vars: { bg: "#FFF1F7", ink: "#4A2B3F", kw: "#C2255C", str: "#2B8A3E", num: "#D9480F", fn: "#5F3DC4", com: "#8A6079", slot: "rgba(194,37,92,.12)" } },
+  ];
+  const CODE_BASE = { bg: "#0F241E", ink: "#E4F3EC", kw: "#FF9E64", str: "#9BE38A", num: "#F7C948", fn: "#7DC8FF", com: "#7A978E", slot: "rgba(247,201,72,.16)" };
+  const codeVars = (v) => ["bg", "ink", "kw", "str", "num", "fn", "com"].map((k) => "--code-" + k + ":" + v[k]).join(";") + ";--slot-bg:" + v.slot + (v.glow ? ";--code-glow:" + v.glow : "");
   const BOT_NAMES = ["Piton Pali", "Kobra Kinga", "Boa Botond", "Anakonda Aliz", "Vipera Vince", "Sikló Sára", "Mamba Márk", "Csörgő Csenge",
     "Taipan Tódor", "Krait Kitti", "Áspis Ármin", "Pitonka Panni", "Boávics Bálint", "Mambácska Zita", "Kobrás Kende", "Sikló Simon", "Vipera Vilma", "Anakonda Ákos"];
   const QUEST_POOL = [
@@ -1123,10 +1160,39 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     s.append(u);
     return s;
   }
-  function tekla(mood) {
+  // accs: a felvett kiegészítők; ha nincs megadva, a játékos saját Teklája (state.acc), [] = csupaszon.
+  function tekla(mood, accs) {
     const s = $("tekla-tpl").content.firstElementChild.cloneNode(true);
     if (mood) s.classList.add(mood);
+    const list = accs === undefined ? state.acc : accs;
+    if (list && list.length) dressTekla(s, list);
     return s;
+  }
+  function dressTekla(svg, list) {
+    const all = svg.querySelector(".t-all"), head = all.querySelector("ellipse[cy='37']");
+    for (const a of ACCS) {
+      if (!list.includes(a.id)) continue;
+      const g = document.createElementNS(NS, "g");
+      g.setAttribute("class", "acc acc-" + a.id);
+      g.innerHTML = a.svg;
+      if (a.back) all.insertBefore(g, head); else all.append(g);
+    }
+  }
+  // Egy másik játékos Teklája a saját kígyójával és kiegészítőivel.
+  function teklaOf(skinId, accStr) {
+    const sk = SKINS.find((s) => s.id === skinId) || SKINS[0], c = sk.c || CLASSIC_C;
+    const t = tekla("still", cleanAccs(String(accStr || "").split(","), ACCS.map((a) => a.id)));
+    t.style.setProperty("--snake", c[0]); t.style.setProperty("--snake-dark", c[1]); t.style.setProperty("--snake-belly", c[2]);
+    return { t, c };
+  }
+  // Csak ismert, birtokolt kiegészítők, helyenként (fej, arc, nyak) legfeljebb egy.
+  function cleanAccs(list, owned) {
+    const out = [], slots = new Set();
+    for (const id of list) {
+      const a = ACCS.find((x) => x.id === id);
+      if (a && owned.includes(id) && !slots.has(a.slot)) { out.push(id); slots.add(a.slot); }
+    }
+    return out;
   }
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
   function md(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"); }
@@ -1206,16 +1272,19 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0, epoch: 0,
       paused: null, // megszakított lecke: innen folytatható (lásd pauseSession)
       owner: "", // a fiók azonosítója, amelyhez ez a mentés tartozik ("" = fiók nélkül, offline gyűjtött haladás)
+      accs: [], acc: [], // megvett és felvett kiegészítők
+      codeThemes: ["base"], codeTheme: "base",
+      shields: 0, // hétvégi pajzs
     };
   }
   function normalize(o) {
     const s = fresh();
     if (!o || typeof o !== "object") return s;
     const n = (k) => { if (Number.isFinite(o[k])) s[k] = o[k]; };
-    ["xp", "streak", "bestStreak", "freezes", "gems", "hearts", "heartTs", "boostUntil", "goal", "league", "weekXp", "updatedAt", "epoch"].forEach(n);
-    for (const k of ["lastDay", "joined", "code", "weekKey", "skin", "seenResult", "owner"]) if (typeof o[k] === "string") s[k] = o[k];
+    ["xp", "streak", "bestStreak", "freezes", "gems", "hearts", "heartTs", "boostUntil", "goal", "league", "weekXp", "updatedAt", "epoch", "shields"].forEach(n);
+    for (const k of ["lastDay", "joined", "code", "weekKey", "skin", "seenResult", "owner", "codeTheme"]) if (typeof o[k] === "string") s[k] = o[k];
     for (const k of ["best", "done", "legend", "chests", "daily", "ach", "mistakes"]) if (o[k] && typeof o[k] === "object" && !Array.isArray(o[k])) s[k] = { ...o[k] };
-    for (const k of ["frozen", "badges", "follows", "skins", "notices"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
+    for (const k of ["frozen", "badges", "follows", "skins", "notices", "accs", "acc", "codeThemes"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
     if (o.stats && typeof o.stats === "object") s.stats = { ...freshStats(), ...o.stats };
     for (const k of ["quests", "monthly", "lostStreak", "prevWeek", "paused"]) if (o[k] && typeof o[k] === "object") s[k] = JSON.parse(JSON.stringify(o[k]));
     if (!o.v) {
@@ -1226,6 +1295,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       if (days.length) s.joined = days[0];
     }
     if (!s.skins.includes("classic")) s.skins.unshift("classic");
+    s.accs = s.accs.filter((id) => ACCS.some((a) => a.id === id));
+    s.acc = cleanAccs(s.acc, s.accs);
+    s.codeThemes = ["base", ...s.codeThemes.filter((id) => id !== "base" && CODE_THEMES.some((t) => t.id === id))];
+    if (!s.codeThemes.includes(s.codeTheme)) s.codeTheme = "base";
+    s.shields = Math.min(SHIELD_MAX, Math.max(0, s.shields));
     if (!GOALS.some((g) => g.xp === s.goal)) s.goal = 30;
     s.freezes = Math.min(FREEZE_MAX, Math.max(0, s.freezes));
     s.hearts = Math.min(HEART_MAX, Math.max(0, s.hearts));
@@ -1329,11 +1403,19 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const t = today();
     if (!state.lastDay || state.streak === 0 || state.lastDay === t || state.lastDay === yesterday()) return;
     const missed = daysBetween(state.lastDay, t) - 1;
-    if (missed > 0 && missed <= state.freezes) {
-      for (let k = 1; k <= missed; k++) state.frozen.push(addDays(state.lastDay, k));
-      state.freezes -= missed;
+    const gap = [];
+    for (let k = 1; k <= missed; k++) gap.push(addDays(state.lastDay, k));
+    // A hétvégi pajzs egy hétvége (szombat, vasárnap) kihagyott napjait védi meg, a többi napot a befagyasztók.
+    const weekendOf = (k) => { const d = parseDay(k).getDay(); return d === 6 ? k : d === 0 ? addDays(k, -1) : null; };
+    const firstWeekend = state.shields > 0 ? gap.map(weekendOf).find(Boolean) : null;
+    const shielded = firstWeekend ? gap.filter((k) => weekendOf(k) === firstWeekend).length : 0;
+    const rest = missed - shielded;
+    if (missed > 0 && rest <= state.freezes) {
+      state.frozen.push(...gap);
+      state.freezes -= rest;
+      if (shielded) state.shields--;
       state.lastDay = yesterday();
-      state.notices.push({ type: "frozen", n: missed, streak: state.streak });
+      state.notices.push({ type: "frozen", n: missed, streak: state.streak, shield: shielded > 0, freezes: rest });
     } else {
       state.lostStreak = { n: state.streak, day: t, last: state.lastDay };
       state.notices.push({ type: "lost", n: state.streak });
@@ -1888,6 +1970,15 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const hex = (v) => "%23" + v.slice(1);
     document.querySelector('link[rel="icon"]').setAttribute("href", sk.c
       ? FAVICON.replace("%231C8A5D", hex(sk.c[1])).replace("%232FB37E", hex(sk.c[0])).replace("%23F6D66B", hex(sk.c[2])) : FAVICON);
+    applyCodeTheme();
+  }
+  // A kódtéma a gyökérelem stílusában írja felül a kódszíneket (ez erősebb a kinézet témájánál is).
+  function applyCodeTheme() {
+    const r = document.documentElement.style;
+    ["bg", "ink", "kw", "str", "num", "fn", "com", "glow"].forEach((k) => r.removeProperty("--code-" + k));
+    r.removeProperty("--slot-bg");
+    const t = CODE_THEMES.find((x) => x.id === state.codeTheme);
+    if (t && t.vars) codeVars(t.vars).split(";").forEach((d) => { const i = d.indexOf(":"); r.setProperty(d.slice(0, i), d.slice(i + 1)); });
   }
   function applyTheme() {
     if (prefs.theme === "light" || prefs.theme === "dark") document.documentElement.setAttribute("data-theme", prefs.theme);
@@ -1915,7 +2006,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return {
       nick: str(p.nick, 24), xp: int(p.xp), streak: int(p.streak, 5000), bestStreak: int(p.bestStreak, 5000), lastDay: str(p.lastDay, 10), weekKey: str(p.weekKey, 12),
       weekXp: int(p.weekXp), league: int(p.league, 9), lessons: int(p.lessons, 1000), ach: int(p.ach, 500), code: str(p.code, 8).toUpperCase(),
-      joined: str(p.joined, 10), skin: str(p.skin, 12), prevWeek: pw,
+      joined: str(p.joined, 10), skin: str(p.skin, 12), acc: str(p.acc, 60), prevWeek: pw,
       follows: Array.isArray(p.follows) ? p.follows.filter((x) => typeof x === "string" && x.length < 200).slice(0, 300) : [],
     };
   }
@@ -1923,7 +2014,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return {
       xp: state.xp, streak: state.streak, bestStreak: state.bestStreak, lastDay: state.lastDay || "", weekKey: state.weekKey || "",
       weekXp: state.weekXp, league: state.league, lessons: LESSONS.filter((_, i) => isDone(i)).length,
-      ach: Object.values(state.ach).reduce((a, b) => a + b, 0), code: state.code, joined: state.joined, skin: state.skin,
+      ach: Object.values(state.ach).reduce((a, b) => a + b, 0), code: state.code, joined: state.joined, skin: state.skin, acc: state.acc.join(","),
       prevWeek: state.prevWeek, follows: state.follows.slice(0, 300),
     };
   }
@@ -2320,6 +2411,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const sheet = $("sheet"), sheetIn = $("sheetIn"), scrim = $("scrim");
   let lastFocus = null, sheetAfter = null, popOpen = null, goalShown = null;
 
+  // A logó Teklái is a felvett kiegészítőket viselik (felvétel, levétel vagy fiókváltás után cseréljük őket).
+  function refreshLogos() {
+    const key = state.acc.join();
+    for (const [id, mood] of [["sideLogo", ""], ["courseBtn", "still"]]) {
+      const old = $(id).querySelector(".tekla");
+      if (!old || old.dataset.acc === key) continue;
+      const t = tekla(mood);
+      t.dataset.acc = key;
+      old.replaceWith(id === "sideLogo" ? poke(t) : t);
+    }
+  }
   function buildShell() {
     const side = $("side"), tabs = $("tabs");
     $("sideLogo").prepend(poke(tekla("")));
@@ -2341,6 +2443,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (changed) window.scrollTo(0, 0);
   }
   function render() {
+    refreshLogos();
     renderNav();
     renderChips();
     viewHost.replaceChildren(VIEWS[prefs.view]());
@@ -2410,6 +2513,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       a.append(entry.name.charAt(0), el("span", { class: "bot", title: "Gépi ellenfél" }, icon("robot")));
     } else if (prof && prof.avatarUrl) {
       a.append(el("img", { src: prof.avatarUrl, alt: "" }));
+    } else if (entry.id && NET.players.has(entry.id)) {
+      // Valódi játékos: a saját Teklája, a kígyója színeivel és a kiegészítőivel.
+      const p = NET.players.get(entry.id), { t, c } = teklaOf(p.skin, p.acc);
+      a.style.setProperty("--ac", "color-mix(in srgb," + c[0] + " 24%,var(--surface))");
+      a.append(t);
     } else {
       a.style.setProperty("--ac", botColor(entry.id || "?"));
       a.append(prof && prof.name ? prof.name.charAt(0).toUpperCase() : "?");
@@ -3059,7 +3167,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       shopItem(icon("snow"), "var(--ice)", "var(--ice-soft)", "Széria-befagyasztó",
         "Ha kihagysz egy napot, megvédi a szériádat. Egyszerre " + FREEZE_MAX + " lehet felszerelve.",
         state.freezes >= FREEZE_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.freeze, null, () => buy(PRICE.freeze, () => { state.freezes++; sfx("freeze"); }, "Széria-befagyasztó felszerelve!")),
-        freezeEq));
+        freezeEq),
+      shopItem(icon("shield"), "var(--blue)", "var(--blue-soft)", "Hétvégi pajzs",
+        "Ha egy hétvégén (szombaton, vasárnap vagy mindkét nap) kimarad a tanulás, megvédi a szériádat, és a befagyasztóid megmaradnak hétköznapra.",
+        state.shields >= SHIELD_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.shield, null, () => buy(PRICE.shield, () => { state.shields++; sfx("freeze"); }, "Hétvégi pajzs felszerelve!"))));
     if (repairAvailable()) {
       const L = state.lostStreak;
       streakSec.append(shopItem(icon("wrench"), "var(--flame)", "var(--flame-soft)", "Széria-javítás",
@@ -3089,8 +3200,43 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           (!owned && state.gems < sk.price ? " Még " + fmtNum(sk.price - state.gems) + " drágakő kell hozzá." : ""), act,
         el("span", { class: "swatches", "aria-hidden": "true" }, sw.map((c) => el("i", { style: "background:" + c })))));
     });
-    root.append(skins);
+    root.append(skins, accShopSec(), codeShopSec());
     return root;
+  }
+  const missing = (price) => (state.gems < price ? " Még " + fmtNum(price - state.gems) + " drágakő kell hozzá." : "");
+  // Felvétel: ugyanarról a helyről (fej, arc, nyak) a régit leveszi.
+  function wearAcc(id) {
+    const a = ACCS.find((x) => x.id === id);
+    state.acc = cleanAccs([id, ...state.acc.filter((x) => ACCS.find((y) => y.id === x).slot !== a.slot)], state.accs);
+  }
+  function accShopSec() {
+    const sec = el("section", { class: "shop-sec" }, el("h2", null, "Kiegészítők"),
+      el("p", { class: "shop-note" }, "Bármelyik kígyóhoz felveheted őket, fejre, arcra és nyakra egyet-egyet. A többiek is látják a ligában és a barátlistán."));
+    for (const a of ACCS) {
+      const owned = state.accs.includes(a.id), worn = state.acc.includes(a.id);
+      // Az előnézetben a mostani kiegészítőid mellett ez is rajta van.
+      const art = tekla("still", cleanAccs([a.id, ...state.acc], ACCS.map((x) => x.id)));
+      const change = (fn, sound) => () => { fn(); save(); sfx(sound); render(); };
+      const act = worn ? el("button", { class: "btn ghost sm", type: "button", onclick: change(() => { state.acc = state.acc.filter((x) => x !== a.id); }, "boop") }, "Leveszem")
+        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: change(() => wearAcc(a.id), "boop") }, "Felveszem")
+        : priceBtn(a.price, null, () => buy(a.price, () => { state.accs.push(a.id); wearAcc(a.id); }, a.name + " a tiéd!"), false, "gem");
+      sec.append(shopItem(art, "var(--brand)", "var(--surface-2)", a.name, a.text + (owned ? "" : missing(a.price)), act,
+        worn ? el("span", { class: "pill", style: "margin-top:6px" }, icon("check"), "Rajtad van") : null));
+    }
+    return sec;
+  }
+  function codeShopSec() {
+    const sec = el("section", { class: "shop-sec" }, el("h2", null, "Kódtémák"),
+      el("p", { class: "shop-note" }, "A leckékben a kódok ezekkel a színekkel jelennek meg."));
+    for (const t of CODE_THEMES) {
+      const v = t.vars || CODE_BASE, owned = state.codeThemes.includes(t.id), using = state.codeTheme === t.id;
+      const preview = el("pre", { class: "code code-mini", style: codeVars(v), "aria-hidden": "true" }, el("code", { html: hl('for i in range(3):\n    print("Szia!")  # köszön') }));
+      const act = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
+        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => { state.codeTheme = t.id; applyCodeTheme(); save(); sfx("boop"); render(); } }, "Ezt kérem")
+        : priceBtn(t.price, null, () => buy(t.price, () => { state.codeThemes.push(t.id); state.codeTheme = t.id; applyCodeTheme(); }, t.name + " kódtéma bekapcsolva!"), false, "gem");
+      sec.append(shopItem(icon("brace"), v.kw, v.bg, t.name, t.text + (owned ? "" : missing(t.price)), act, preview));
+    }
+    return sec;
   }
 
   // ===================== Profile view =====================
@@ -3327,7 +3473,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const legal = (id, text) => el("button", { class: "link", type: "button", onclick: () => openLegal(id) }, text);
     gateEl = el("div", { class: "gate", role: "dialog", "aria-modal": "true", "aria-labelledby": "gateTitle" },
       el("div", { class: "gate-in" },
-        poke(tekla("happy")),
+        poke(tekla("happy", [])),
         el("h1", { id: "gateTitle" }, "Szia! Én Tekla vagyok."),
         el("p", { class: "gate-lead" }, "Együtt tanulunk Pythont, kis lépésekben. Hogy szólíthatlak?"),
         form,
@@ -3441,7 +3587,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("A kodkigyo.hu használatához fiók kell, de csak egy becenevet kérünk hozzá: e-mail címet, jelszót vagy valódi nevet nem. A fiók adatait a Cloudflare D1 adatbázisában, az Európai Unió területén tároljuk:"),
         ul("a beceneved és a barátkódod;",
           "a belépőkódod, de csak visszafejthetetlen (hash) formában;",
-          "a játékstatisztikáid: összes XP, heti XP az elmúlt 8 hétre, széria, liga, a teljesített leckék és eredmények száma, Tekla kinézete és a csatlakozás dátuma;",
+          "a játékstatisztikáid: összes XP, heti XP az elmúlt 8 hétre, széria, liga, a teljesített leckék és eredmények száma, Tekla kinézete és kiegészítői, valamint a csatlakozás dátuma;",
           "kiket követsz, melyik osztály tagja vagy, és melyik heti ligacsoportba kerültél;",
           "a haladásod mentése, amelyet csak te látsz;",
           "a jelentések, ha te jelentesz valakit, vagy téged jelentenek."),
@@ -3452,7 +3598,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("h3", null, "Ha a Kódkígyót a claude.ai-on használod"),
         p("A barátok és a ranglista miatt az online módban adatokat tárolunk az Anthropic (claude.ai) artifact-tárhelyén:"),
         ul("a haladásod mentését, amelyet csak te látsz;",
-          "a nyilvános játékprofilodat, amelyet a Kódkígyó többi felhasználója is lát: összes és heti XP, széria, liga, a teljesített leckék és eredmények száma, a barátkódod, kiket követsz, mikor csatlakoztál és Tekla kinézete."),
+          "a nyilvános játékprofilodat, amelyet a Kódkígyó többi felhasználója is lát: összes és heti XP, széria, liga, a teljesített leckék és eredmények száma, a barátkódod, kiket követsz, mikor csatlakoztál, valamint Tekla kinézete és kiegészítői."),
         p("A neved és a profilképed a claude.ai-fiókodból jelenik meg a többieknek, ezeket a Kódkígyó nem tárolja. A claude.ai használatára az Anthropic feltételei és ", ext("https://www.anthropic.com/legal/privacy", "adatvédelmi tájékoztatója"), " vonatkozik."),
         el("h3", null, "Cél és jogalap"),
         p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont). A regisztrációs korlát és a robotszűrés célja a szolgáltatás és a felhasználók védelme a visszaélésekkel szemben. Ennek jogalapja a jogos érdekünk (GDPR 6. cikk (1) bekezdés f) pont)."),
@@ -3800,7 +3946,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         act("+1 befagyasztó", () => { state.freezes = Math.min(FREEZE_MAX, state.freezes + 1); }))),
       sec("Dupla XP", boostActive() ? "aktív" : "nincs", row(act("+15 perc", () => { state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS; }))),
       sec("Tananyag", null, row(act("Minden lecke feloldása", () => { LESSONS.forEach((l) => { if (!state.done[l.id]) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 3; } }); }))),
-      sec("Kígyók és témák", null, row(act("Minden kígyó megszerzése", () => { SKINS.forEach((s) => { if (!state.skins.includes(s.id)) state.skins.push(s.id); }); }, "Kész! A Boltban bármelyiket felveheted."))),
+      sec("Kígyók, kiegészítők, kódtémák", null, row(
+        act("Minden kígyó", () => { SKINS.forEach((s) => { if (!state.skins.includes(s.id)) state.skins.push(s.id); }); }, "Kész! A Boltban bármelyiket felveheted."),
+        act("Minden kiegészítő", () => { ACCS.forEach((a) => { if (!state.accs.includes(a.id)) state.accs.push(a.id); }); }, "Kész! A Boltban felpróbálhatod őket."),
+        act("Minden kódtéma", () => { CODE_THEMES.forEach((t) => { if (!state.codeThemes.includes(t.id)) state.codeThemes.push(t.id); }); }, "Kész! A Boltban válthatsz közöttük."))),
+      sec("Hétvégi pajzs", state.shields + "/" + SHIELD_MAX, row(act("+1 pajzs", () => { state.shields = SHIELD_MAX; }))),
       sec("Értesítések kipróbálása", "csak megjelenik, nem változtat semmit", row(
         notice("Feljutás", { type: "league", rank: 1, res: "up", from: lg, to: Math.min(LEAGUES.length - 1, lg + 1), reward: LEAGUE_REWARDS[0] }),
         notice("Kiesés", { type: "league", rank: 27, res: "down", from: lg, to: Math.max(0, lg - 1), reward: 0 }),
@@ -3866,7 +4016,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (n.type === "frozen") {
       sfx("freeze");
       openSheet(null, el("div", { class: "streak-hero" }, icon("flameIce", "flame-big"), el("div", null, el("b", { id: "sheetTitle", style: "color:var(--ice)" }, n.streak + " nap"), el("span", { class: "muted" }, "A szériád biztonságban van."))),
-        el("p", { class: "meta" }, (n.n === 1 ? "Kihagytál egy napot" : "Kihagytál " + n.n + " napot") + ", de a széria-befagyasztó megvédte a szériádat. Ma folytasd egy leckével!"),
+        el("p", { class: "meta" }, (n.n === 1 ? "Kihagytál egy napot" : "Kihagytál " + n.n + " napot") + ", de " +
+          (n.shield ? (n.freezes ? "a hétvégi pajzs és a széria-befagyasztó" : "a hétvégi pajzs") : "a széria-befagyasztó") + " megvédte a szériádat. Ma folytasd egy leckével!"),
         el("button", { class: "btn ice wide", type: "button", onclick: closeSheet }, "Szuper"));
     } else if (n.type === "lost") {
       openSheet(null, tekla("sad"), el("h3", { id: "sheetTitle" }, "Megszakadt a szériád"),
