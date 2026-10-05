@@ -91,4 +91,4 @@ npx wrangler d1 execute kodkigyo --remote --command "UPDATE players SET nick = '
 
 ## Költségek
 
-Az ingyenes Workers-csomag napi 100 000 kérést enged. A D1 napi 5 millió sorolvasást, 100 000 sorírást és összesen 5 GB tárhelyet ad. Egy iskolai méretű használathoz ez bőven elég. Ha kinőnéd, a fizetős csomag havi 5 dollártól indul.
+Az ingyenes Workers-csomag napi 100 000 API-kérést enged; a statikus fájlok (maga az oldal, a képek) ebbe nem számítanak bele. A D1 ingyen napi 5 millió sorolvasást és 100 000 sorírást ad, és egy adatbázis legfeljebb 500 MB lehet. Egy fiók kb. 2–15 KB, így a tárhely több tízezer fióknak elég. Hamarabb a napi forgalmi keret fogy el: nagyjából 1500–2500 naponta aktív játékosig elég. Ha elfogy, éjfélig (UTC) az online részek nem működnek, és új fiók sem hozható létre. A használatot a Cloudflare-ben a Workers › kodkigyo › Metrics és a D1 › kodkigyo › Metrics oldalon látod. A fizetős csomag (havi 5 dollár) ezt nagyságrendekkel megemeli.
