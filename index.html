@@ -1024,20 +1024,21 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // c: Tekla színei. theme: a felület színei ehhez a kígyóhoz. h a semleges színek (háttér, vonalak, szöveg)
   // árnyalata, light/dark a fő szín, a sötétebb változata és a halvány háttere világos és sötét módban.
   // A klasszikus Tekla a CSS alapértelmezett zöld témáját használja.
+  // Az árak egyre nőnek (napi kb. 30–40 drágakővel: kb. 1, 2, 4 és 6 hét gyűjtés); a boltban ebben a sorrendben jelennek meg.
   const SKINS = [
     { id: "classic", name: "Klasszikus Tekla", tone: "zöld", price: 0, c: null, theme: null },
-    { id: "gold", name: "Királykobra", tone: "arany", price: 200, c: ["#E5B22E", "#B5860F", "#FFF1B8"],
-      theme: { h: 43, light: ["#B47F06", "#8A6000", "#FBEFC9"], dark: ["#D99B16", "#A06F00", "#3A2E10"],
-        units: [[28, 80, 42], [48, 85, 34], [15, 70, 38], [35, 55, 30], [22, 72, 37]] } },
-    { id: "night", name: "Éjféli piton", tone: "lila", price: 250, c: ["#7C6CF0", "#5145C4", "#C9F1FF"],
-      theme: { h: 248, light: ["#6A57E0", "#4B3AB8", "#E6E2FC"], dark: ["#8676F2", "#5546C9", "#221D45"],
-        units: [[222, 65, 48], [270, 55, 50], [235, 45, 38], [290, 50, 44], [205, 70, 40]] } },
-    { id: "coral", name: "Korallkígyó", tone: "piros", price: 300, c: ["#EF5F42", "#B53B23", "#FFE08A"],
-      theme: { h: 10, light: ["#E0492C", "#B0331A", "#FCE3DC"], dark: ["#F0603F", "#B83C22", "#3D1D16"],
-        units: [[25, 85, 45], [350, 65, 48], [5, 60, 36], [335, 55, 46], [18, 55, 38]] } },
     { id: "ice", name: "Jégsikló", tone: "kék", price: 300, c: ["#56C1E9", "#2C8DB8", "#F1FBFF"],
       theme: { h: 199, light: ["#1E8FC4", "#156A94", "#DDF1FB"], dark: ["#3AA9E0", "#1F78A6", "#12303F"],
         units: [[215, 65, 48], [185, 70, 34], [205, 60, 33], [230, 50, 52], [175, 60, 32]] } },
+    { id: "coral", name: "Korallkígyó", tone: "piros", price: 600, c: ["#EF5F42", "#B53B23", "#FFE08A"],
+      theme: { h: 10, light: ["#E0492C", "#B0331A", "#FCE3DC"], dark: ["#F0603F", "#B83C22", "#3D1D16"],
+        units: [[25, 85, 45], [350, 65, 48], [5, 60, 36], [335, 55, 46], [18, 55, 38]] } },
+    { id: "night", name: "Éjféli piton", tone: "lila", price: 1000, c: ["#7C6CF0", "#5145C4", "#C9F1FF"],
+      theme: { h: 248, light: ["#6A57E0", "#4B3AB8", "#E6E2FC"], dark: ["#8676F2", "#5546C9", "#221D45"],
+        units: [[222, 65, 48], [270, 55, 50], [235, 45, 38], [290, 50, 44], [205, 70, 40]] } },
+    { id: "gold", name: "Királykobra", tone: "arany", price: 1500, c: ["#E5B22E", "#B5860F", "#FFF1B8"],
+      theme: { h: 43, light: ["#B47F06", "#8A6000", "#FBEFC9"], dark: ["#D99B16", "#A06F00", "#3A2E10"],
+        units: [[28, 80, 42], [48, 85, 34], [15, 70, 38], [35, 55, 30], [22, 72, 37]] } },
   ];
   const BOT_NAMES = ["Piton Pali", "Kobra Kinga", "Boa Botond", "Anakonda Aliz", "Vipera Vince", "Sikló Sára", "Mamba Márk", "Csörgő Csenge",
     "Taipan Tódor", "Krait Kitti", "Áspis Ármin", "Pitonka Panni", "Boávics Bálint", "Mambácska Zita", "Kobrás Kende", "Sikló Simon", "Vipera Vilma", "Anakonda Ákos"];
@@ -2958,7 +2959,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         : priceBtn(sk.price, null, () => buy(sk.price, () => { state.skins.push(sk.id); state.skin = sk.id; applySkin(); }, sk.name + " a tiéd!"), false, "gem");
       const sw = sk.theme ? [sk.theme.light[0], sk.theme.light[2], `hsl(${sk.theme.h} 18% 93%)`] : ["#129C6B", "#D3F2E4", "#E9F0EB"];
       skins.append(shopItem(art, "var(--brand)", "var(--surface-2)", sk.name,
-        sk.c ? "Tekla és vele az egész felület " + sk.tone + " színekbe öltözik." : "Az eredeti, zöld Tekla és zöld felület.", act,
+        (sk.c ? "Tekla és vele az egész felület " + sk.tone + " színekbe öltözik." : "Az eredeti, zöld Tekla és zöld felület.") +
+          (!owned && state.gems < sk.price ? " Még " + fmtNum(sk.price - state.gems) + " drágakő kell hozzá." : ""), act,
         el("span", { class: "swatches", "aria-hidden": "true" }, sw.map((c) => el("i", { style: "background:" + c })))));
     });
     root.append(skins);
