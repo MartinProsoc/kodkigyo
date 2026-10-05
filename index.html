@@ -388,6 +388,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 @keyframes cfRise{from{transform:translateY(16px);opacity:0}}
 .cf-fly{position:absolute;left:0;top:0;z-index:5;width:30px;height:30px;margin:-15px 0 0 -15px;pointer-events:none;color:#A68CFF;filter:drop-shadow(0 0 8px rgba(166,140,255,.85))}
 .cf-fly .ic{width:100%;height:100%}
+.swatches{display:flex;gap:6px;margin-top:8px}
+.swatches i{width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.08)}
 /* Tesztpanel (csak az üzemeltetőnek) */
 .dev-sec{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:2px solid var(--line)}
 .dev-sec>b{display:flex;justify-content:space-between;gap:8px}
@@ -1019,12 +1021,23 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     { name: "Mamba", c: "#3DAA4E" }, { name: "Taipan", c: "#E37E2E" }, { name: "Piton", c: "#2F74C0" }, { name: "Boa", c: "#C43F52" },
     { name: "Anakonda", c: "#2E6B52" }, { name: "Királykobra", c: "#D9A21A" },
   ];
+  // c: Tekla színei. theme: a felület színei ehhez a kígyóhoz. h a semleges színek (háttér, vonalak, szöveg)
+  // árnyalata, light/dark a fő szín, a sötétebb változata és a halvány háttere világos és sötét módban.
+  // A klasszikus Tekla a CSS alapértelmezett zöld témáját használja.
   const SKINS = [
-    { id: "classic", name: "Klasszikus Tekla", price: 0, c: null },
-    { id: "gold", name: "Királykobra", price: 200, c: ["#E5B22E", "#B5860F", "#FFF1B8"] },
-    { id: "night", name: "Éjféli piton", price: 250, c: ["#7C6CF0", "#5145C4", "#C9F1FF"] },
-    { id: "coral", name: "Korallkígyó", price: 300, c: ["#EF5F42", "#B53B23", "#FFE08A"] },
-    { id: "ice", name: "Jégsikló", price: 300, c: ["#56C1E9", "#2C8DB8", "#F1FBFF"] },
+    { id: "classic", name: "Klasszikus Tekla", tone: "zöld", price: 0, c: null, theme: null },
+    { id: "gold", name: "Királykobra", tone: "arany", price: 200, c: ["#E5B22E", "#B5860F", "#FFF1B8"],
+      theme: { h: 43, light: ["#B47F06", "#8A6000", "#FBEFC9"], dark: ["#D99B16", "#A06F00", "#3A2E10"],
+        units: [[28, 80, 42], [48, 85, 34], [15, 70, 38], [35, 55, 30], [22, 72, 37]] } },
+    { id: "night", name: "Éjféli piton", tone: "lila", price: 250, c: ["#7C6CF0", "#5145C4", "#C9F1FF"],
+      theme: { h: 248, light: ["#6A57E0", "#4B3AB8", "#E6E2FC"], dark: ["#8676F2", "#5546C9", "#221D45"],
+        units: [[222, 65, 48], [270, 55, 50], [235, 45, 38], [290, 50, 44], [205, 70, 40]] } },
+    { id: "coral", name: "Korallkígyó", tone: "piros", price: 300, c: ["#EF5F42", "#B53B23", "#FFE08A"],
+      theme: { h: 10, light: ["#E0492C", "#B0331A", "#FCE3DC"], dark: ["#F0603F", "#B83C22", "#3D1D16"],
+        units: [[25, 85, 45], [350, 65, 48], [5, 60, 36], [335, 55, 46], [18, 55, 38]] } },
+    { id: "ice", name: "Jégsikló", tone: "kék", price: 300, c: ["#56C1E9", "#2C8DB8", "#F1FBFF"],
+      theme: { h: 199, light: ["#1E8FC4", "#156A94", "#DDF1FB"], dark: ["#3AA9E0", "#1F78A6", "#12303F"],
+        units: [[215, 65, 48], [185, 70, 34], [205, 60, 33], [230, 50, 52], [175, 60, 32]] } },
   ];
   const BOT_NAMES = ["Piton Pali", "Kobra Kinga", "Boa Botond", "Anakonda Aliz", "Vipera Vince", "Sikló Sára", "Mamba Márk", "Csörgő Csenge",
     "Taipan Tódor", "Krait Kitti", "Áspis Ármin", "Pitonka Panni", "Boávics Bálint", "Mambácska Zita", "Kobrás Kende", "Sikló Simon", "Vipera Vilma", "Anakonda Ákos"];
@@ -1804,11 +1817,41 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     tk.addEventListener("animationend", (e) => { if (e.animationName === "boing") tk.classList.remove("boing"); });
     return tk;
   }
+  // A kinézet téma-színei CSS-ként. Ugyanazokat a változókat írja felül, mint a :root alapértékei,
+  // a klasszikus zöld téma telítettségével és világosságával, csak a kígyó árnyalatában.
+  function skinThemeCss(t) {
+    const c = (s, l, a) => `hsl(${t.h} ${s}% ${l}%${a ? " / " + a : ""})`;
+    // Az egységek színei is a kígyó színcsaládjából jönnek: az 1. a fő szín, a többi a units listából (h, s, l).
+    const units = (dark) => `--u1:${dark ? t.dark[0] : t.light[0]};--u1d:${dark ? t.dark[1] : t.light[1]};` +
+      t.units.map(([h, s, l], i) => { const L = dark ? l + 6 : l; return `--u${i + 2}:hsl(${h} ${s}% ${L}%);--u${i + 2}d:hsl(${h} ${s}% ${L - 12}%);`; }).join("");
+    const light = `--bg:${c(18, 95.5)};--surface-2:${c(18, 93)};--surface-3:${c(17, 88)};--ink:${c(37, 12)};--ink-soft:${c(12, 38)};--ink-faint:${c(12, 58)};--line:${c(16, 85)};` +
+      `--lock:${c(13, 86)};--lock-deep:${c(13, 74)};--lock-ink:${c(10, 58)};--code-bg:${c(41, 10)};--scrim:${c(50, 6, 0.5)};--shadow:${c(54, 10, 0.16)};` +
+      `--brand:${t.light[0]};--brand-deep:${t.light[1]};--brand-soft:${t.light[2]};` +
+      // A másodlagos kiemelés (eddig kék: szöveges gombok, linkek) a fő szín sötétebb árnyalata lesz.
+      `--blue:${t.light[1]};--blue-deep:color-mix(in srgb,${t.light[1]} 72%,#000);--blue-soft:${t.light[2]};` + units(false);
+    const dark =`--bg:${c(27, 6)};--surface:${c(26, 10)};--surface-2:${c(24, 13)};--surface-3:${c(23, 18)};--ink:${c(30, 93)};--ink-soft:${c(13, 66)};--ink-faint:${c(11, 48)};--line:${c(23, 19)};` +
+      `--lock:${c(20, 18)};--lock-deep:${c(25, 12)};--lock-ink:${c(11, 42)};--code-bg:${c(42, 5)};` +
+      `--brand:${t.dark[0]};--brand-deep:${t.dark[1]};--brand-soft:${t.dark[2]};` +
+      `--blue:${t.dark[0]};--blue-deep:${t.dark[1]};--blue-soft:${t.dark[2]};` + units(true);
+    return`:root{${light}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
+  }
+  const FAVICON = document.querySelector('link[rel="icon"]').getAttribute("href");
   function applySkin() {
     const sk = SKINS.find((s) => s.id === state.skin) || SKINS[0];
     const r = document.documentElement.style;
     if (!sk.c) ["--snake", "--snake-dark", "--snake-belly"].forEach((p) => r.removeProperty(p));
     else { r.setProperty("--snake", sk.c[0]); r.setProperty("--snake-dark", sk.c[1]); r.setProperty("--snake-belly", sk.c[2]); }
+    // A felület is a kígyó színeit veszi fel.
+    let st = $("skinTheme");
+    if (!st) { st = el("style", { id: "skinTheme" }); document.head.append(st); }
+    st.textContent = sk.theme ? skinThemeCss(sk.theme) : "";
+    const [mLight, mDark] = document.querySelectorAll('meta[name="theme-color"]');
+    mLight.setAttribute("content", sk.theme ? `hsl(${sk.theme.h} 18% 95.5%)` : "#F2F6F2");
+    mDark.setAttribute("content", sk.theme ? `hsl(${sk.theme.h} 27% 6%)` : "#0C1512");
+    // A böngészőfül ikonján is Tekla aktuális színe látszik.
+    const hex = (v) => "%23" + v.slice(1);
+    document.querySelector('link[rel="icon"]').setAttribute("href", sk.c
+      ? FAVICON.replace("%231C8A5D", hex(sk.c[1])).replace("%232FB37E", hex(sk.c[0])).replace("%23F6D66B", hex(sk.c[2])) : FAVICON);
   }
   function applyTheme() {
     if (prefs.theme === "light" || prefs.theme === "dark") document.documentElement.setAttribute("data-theme", prefs.theme);
@@ -2913,7 +2956,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const act = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
         : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => { state.skin = sk.id; applySkin(); save(); sfx("boop"); render(); } }, "Felveszem")
         : priceBtn(sk.price, null, () => buy(sk.price, () => { state.skins.push(sk.id); state.skin = sk.id; applySkin(); }, sk.name + " a tiéd!"), false, "gem");
-      skins.append(shopItem(art, "var(--brand)", "var(--surface-2)", sk.name, sk.c ? "Tekla új színekben a térképen, a leckékben és a profilodon." : "Az eredeti, zöld Tekla.", act));
+      const sw = sk.theme ? [sk.theme.light[0], sk.theme.light[2], `hsl(${sk.theme.h} 18% 93%)`] : ["#129C6B", "#D3F2E4", "#E9F0EB"];
+      skins.append(shopItem(art, "var(--brand)", "var(--surface-2)", sk.name,
+        sk.c ? "Tekla és vele az egész felület " + sk.tone + " színekbe öltözik." : "Az eredeti, zöld Tekla és zöld felület.", act,
+        el("span", { class: "swatches", "aria-hidden": "true" }, sw.map((c) => el("i", { style: "background:" + c })))));
     });
     root.append(skins);
     return root;
@@ -3545,6 +3591,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         act("+1 befagyasztó", () => { state.freezes = Math.min(FREEZE_MAX, state.freezes + 1); }))),
       sec("Dupla XP", boostActive() ? "aktív" : "nincs", row(act("+15 perc", () => { state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS; }))),
       sec("Tananyag", null, row(act("Minden lecke feloldása", () => { LESSONS.forEach((l) => { if (!state.done[l.id]) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 3; } }); }))),
+      sec("Kígyók és témák", null, row(act("Minden kígyó megszerzése", () => { SKINS.forEach((s) => { if (!state.skins.includes(s.id)) state.skins.push(s.id); }); }, "Kész! A Boltban bármelyiket felveheted."))),
       sec("Értesítések kipróbálása", "csak megjelenik, nem változtat semmit", row(
         notice("Feljutás", { type: "league", rank: 1, res: "up", from: lg, to: Math.min(LEAGUES.length - 1, lg + 1), reward: LEAGUE_REWARDS[0] }),
         notice("Kiesés", { type: "league", rank: 27, res: "down", from: lg, to: Math.max(0, lg - 1), reward: 0 }),
