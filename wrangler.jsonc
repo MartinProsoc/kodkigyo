@@ -8,6 +8,8 @@
   "assets": { "directory": "./public", "binding": "ASSETS" },
   // Ne legyen minden verziónak külön nyilvános címe, csak az éles oldal.
   "preview_urls": false,
+  // A régi kodkigyo.<fiók>.workers.dev cím is működjön tovább, amíg mindenki átszokik a kodkigyo.hu-ra.
+  "workers_dev": true,
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,7 +22,10 @@
   // Az üzemeltető fiókazonosítója(i) vesszővel elválasztva: nekik az app tesztpanelt mutat (Profil › Teszt).
   "vars": { "ADMIN_IDS": "54Z52J8H" },
   // Óránként lezárja a véget ért heti ligacsoportokat, és törli a lejárt adatokat.
-  "triggers": { "crons": ["7 * * * *"] }
-  // Saját domainhez (miután a kodkigyo.hu a Cloudflare-en van), vedd ki a megjegyzésből:
-  // , "routes": [{ "pattern": "kodkigyo.hu", "custom_domain": true }]
+  "triggers": { "crons": ["7 * * * *"] },
+  // Saját domain: a Cloudflare a DNS-rekordokat és a tanúsítványt magától létrehozza hozzá.
+  "routes": [
+    { "pattern": "kodkigyo.hu", "custom_domain": true },
+    { "pattern": "www.kodkigyo.hu", "custom_domain": true }
+  ]
 }
