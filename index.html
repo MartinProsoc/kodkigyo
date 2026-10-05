@@ -1,13 +1,22 @@
 <!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Kódkígyó – tanulj Pythont játékosan</title>
-<meta name="description" content="Tanulj Pythont játékosan, magyarul! Rövid leckék, azonnali visszajelzés, napi széria és ligák Teklával, a kódoló kígyóval. Ingyenes, regisztráció nélkül is használható.">
+<meta name="description" content="Tanulj Pythont játékosan, magyarul! Rövid leckék, azonnali visszajelzés, napi széria és online liga Teklával, a kódoló kígyóval. Ingyenes, csak egy becenév kell hozzá.">
 <meta name="theme-color" content="#F2F6F2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0C1512" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://kodkigyo.hu/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Kódkígyó">
+<meta property="og:url" content="https://kodkigyo.hu/">
 <meta property="og:title" content="Kódkígyó – tanulj Pythont játékosan">
-<meta property="og:description" content="Rövid leckék, napi széria és ligák Teklával, a kódoló kígyóval. Ingyenes, magyar nyelvű Python-tanulás.">
+<meta property="og:description" content="Rövid leckék, napi széria és online liga Teklával, a kódoló kígyóval. Ingyenes, magyar nyelvű Python-tanulás.">
 <meta property="og:locale" content="hu_HU">
+<meta property="og:image" content="https://kodkigyo.hu/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Tekla, a zöld kígyó, mellette a felirat: Kódkígyó – Tanulj Pythont játékosan, magyarul!">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='28 6 60 60'%3E%3Cellipse cx='58' cy='37' rx='28' ry='24' fill='%231C8A5D'/%3E%3Cellipse cx='58' cy='36' rx='27' ry='22.5' fill='%232FB37E'/%3E%3Cellipse cx='58' cy='47' rx='17' ry='9.5' fill='%23F6D66B'/%3E%3Ccircle cx='46.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='48' cy='32' r='4.8' fill='%2311241E'/%3E%3Ccircle cx='69.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='71' cy='32' r='4.8' fill='%2311241E'/%3E%3Cpath d='M52 46.5q6 5 12 0' fill='none' stroke='%2311241E' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* Layout: nav rail left · learning path center · stats rail right. Phones: top stat bar + bottom tab bar.
@@ -411,6 +420,14 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .dev-row{display:flex;flex-wrap:wrap;gap:8px}
 .dev-row .btn{flex:0 0 auto}
 .dev-chest{color:var(--dc) !important;border-color:var(--dc) !important}
+.dev-count{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--heart);color:#fff;font:800 12px/1 var(--f-body)}
+.mod-list{display:flex;flex-direction:column}
+.mod-row{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:2px solid var(--line)}
+.mod-who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mod-who b{overflow-wrap:anywhere}
+.mod-who small{color:var(--ink-soft);font-weight:600}
+.mod-who .mod-rep{color:var(--heart-deep)}
+.mod-del{color:var(--heart-deep) !important}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .month-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:linear-gradient(135deg,var(--gem),var(--blue));color:var(--on-color);border-radius:22px;padding:18px;box-shadow:0 5px 0 var(--gem-deep)}
 .month-badge{width:76px;height:84px;color:var(--sun)}
@@ -3307,9 +3324,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("p", { class: "muted" }, "Csatlakozott: " + fmtJoined(state.joined) + (online() ? "" : NET.mode === "server" ? " · Fiók nélkül" : " · Offline mód")),
         online() ? el("div", { class: "follow-counts" }, el("span", null, el("b", null, state.follows.length), " követett"), el("span", null, el("b", null, followers().length), " követő")) : null));
     const root = el("div", { class: "view" },
-      el("div", { class: "view-head", style: "flex-direction:row;align-items:center;justify-content:space-between;gap:8px" }, el("h1", null, "Profil"),
-        el("div", { style: "display:flex;gap:8px" },
-          devMode() ? el("button", { class: "btn ghost sm", type: "button", id: "devBtn", onclick: devPanel }, icon("bolt"), "Teszt") : null,
+      el("div", { class: "view-head", style: "flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px" }, el("h1", null, "Profil"),
+        el("div", { style: "display:flex;flex-wrap:wrap;gap:8px" },
+          devMode() ? el("button", { class: "btn ghost sm", type: "button", id: "devBtn", onclick: devPanel }, icon("bolt"), "Teszt",
+            modOn() && NET.me.reported ? el("span", { class: "dev-count", title: "Jelentett játékosok" }, String(NET.me.reported)) : null) : null,
           el("button", { class: "btn ghost sm", type: "button", onclick: settingsSheet }, icon("gear"), "Beállítások"))),
       head);
     if (online()) {
@@ -3735,6 +3753,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
       el("h3", { id: "sheetTitle" }, "Tesztpanel"),
       el("p", { class: "meta" }, "Kipróbálhatod vele a játék részeit. A saját mentésedet módosítja, a ligában versenyző heti XP-hez nem nyúl."),
+      modOn() ? sec("Moderálás", NET.me.reported ? NET.me.reported + " jelentett játékos vár" : "nincs új jelentés",
+        row(el("button", { class: "btn ghost sm", type: "button", onclick: () => modPanel() }, icon("shield"), "Jelentések és keresés"))) : null,
       sec("Drágakövek", "most " + state.gems, row(act("+50", () => addGems(50)), act("+500", () => addGems(500)), act("Nullázás", () => { state.gems = 0; }))),
       sec("Szívek", "most " + heartsNow() + "/" + HEART_MAX, row(act("Feltöltés", () => { state.hearts = HEART_MAX; }), act("Elfogyasztás", () => { state.hearts = 0; state.heartTs = Date.now(); }))),
       sec("Láda kinyitása", "a jutalmat meg is kapod",
@@ -3756,6 +3776,56 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         notice("Befagyasztó", { type: "frozen", n: 1, streak: Math.max(liveStreak(), 5) }),
         notice("Megszakadt széria", { type: "lost", n: Math.max(liveStreak(), 12) }))),
       el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Kész"));
+  }
+
+  // ---------- Moderálás (csak az üzemeltetőnek, a szerver ellenőrzi) ----------
+  function modOn() { return NET.mode === "server" && !!(NET.me && NET.me.admin); }
+  async function modPanel(query) {
+    const list = el("div", { class: "mod-list" }, el("p", { class: "note" }, "Betöltés…"));
+    const q = el("input", { class: "search", id: "modFind", maxlength: "30", placeholder: "Becenév vagy barátkód", autocomplete: "off", spellcheck: "false", "aria-label": "Játékos keresése", value: query || "" });
+    const find = el("button", { class: "btn blue", type: "button" }, "Keresés");
+    const run = () => { const v = q.value.trim(); if (!v || v.length >= 2) modPanel(v); };
+    find.addEventListener("click", run);
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); run(); } });
+    openSheet(null,
+      el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
+      el("h3", { id: "sheetTitle" }, "Moderálás"),
+      el("p", { class: "meta" }, query ? "Találatok erre: „" + query + "”. Üres kereséssel visszakapod a jelentett játékosokat."
+        : "A jelentett játékosok, elöl azok, akiket a legtöbben jelentettek. Az átnevezés a becenevet „Játékos” és a barátkód formára cseréli, és lezárja a jelentéseket."),
+      el("div", { class: "row" }, q, find),
+      list,
+      el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: devPanel }, "Tesztpanel"), el("button", { class: "btn", type: "button", onclick: closeSheet }, "Kész")));
+    try {
+      const r = await api("GET", query ? "admin/find?q=" + encodeURIComponent(query) : "admin/reports");
+      list.replaceChildren(...(r.players.length ? r.players.map((p) => modItem(p, query))
+        : [el("p", { class: "note" }, query ? "Nincs találat." : "Nincs jelentett játékos. Minden rendben!")]));
+    } catch (e) { list.replaceChildren(el("p", { class: "note" }, e.message)); }
+  }
+  // Művelet után frissítjük a jelentésszámot is (Profil › Teszt gomb).
+  async function modAct(id, action) {
+    await api("POST", "admin/player", { id, action });
+    refreshSocial().then(renderSocial, () => {});
+  }
+  function modItem(p, query) {
+    const act = (action, done) => (e) => busy(e.currentTarget, null, async () => { await modAct(p.id, action); toast(done); modPanel(query); });
+    const rep = p.reports
+      ? p.reports + " jelentés" + (p.nickReports ? " (" + p.nickReports + " a becenév miatt)" : "") + ", " + p.reporters + " játékostól · legutóbb " + p.last
+      : "nincs jelentés";
+    return el("div", { class: "mod-row" },
+      el("div", { class: "mod-who" }, el("b", null, p.nick),
+        el("small", null, [p.code, fmtNum(p.xp) + " XP", "csatlakozott " + p.joined, "utoljára aktív " + p.seen].join(" · ")),
+        el("small", { class: p.reports ? "mod-rep" : null }, rep)),
+      el("div", { class: "dev-row" },
+        el("button", { class: "btn ghost sm", type: "button", onclick: act("rename", "Átnevezve: Játékos " + p.code) }, "Átnevezés"),
+        p.reports ? el("button", { class: "btn ghost sm", type: "button", onclick: act("dismiss", "A jelentéseket lezártad.") }, "Rendben van") : null,
+        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modDelete(p, query) }, "Fiók törlése") : null));
+  }
+  function modDelete(p, query) {
+    const btn = el("button", { class: "btn bad", type: "button" }, "Törlés");
+    btn.addEventListener("click", () => busy(btn, null, async () => { await modAct(p.id, "delete"); toast("A fiókot törölted."); modPanel(query); }));
+    openSheet(null, el("h3", { id: "sheetTitle" }, "Törlöd „" + p.nick + "” fiókját?"),
+      el("p", { class: "meta" }, "A játékos minden adata törlődik, és ez nem vonható vissza. Csak akkor használd, ha az átnevezés nem elég, például ha valaki újra és újra bántó nevet ad meg."),
+      el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => modPanel(query) }, "Mégsem"), btn));
   }
 
   function showNotices() {

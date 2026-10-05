@@ -3,6 +3,9 @@ import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 
 mkdirSync("public", { recursive: true });
 copyFileSync("index.html", "public/index.html");
+// Link-előnézet (Messenger, Discord, WhatsApp…) és az iPhone kezdőképernyő-ikonja.
+copyFileSync("og.jpg", "public/og.jpg");
+copyFileSync("apple-touch-icon.png", "public/apple-touch-icon.png");
 // Egyetlen külső forrás a Cloudflare Turnstile robotszűrője (fiók létrehozásakor); ehhez kell a
 // challenges.cloudflare.com, és hogy a böngésző elküldje neki az oldal címét (strict-origin).
 const TS = "https://challenges.cloudflare.com";

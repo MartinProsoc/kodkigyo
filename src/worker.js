@@ -103,8 +103,8 @@ async function authenticate(req, env) {
   return p;
 }
 
-// Az üzemeltető fiókja(i) (wrangler.jsonc: vars.ADMIN_IDS). Nekik az app tesztpanelt mutat;
-// ez csak a felületet nyitja meg, a szerveren semmilyen többletjogot nem ad.
+// Az üzemeltető fiókja(i) (wrangler.jsonc: vars.ADMIN_IDS). Nekik az app tesztpanelt mutat, és csak ők
+// használhatják a moderálás végpontjait (/api/admin/...): jelentések, keresés, átnevezés, törlés.
 const isAdmin = (env, id) => String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(id);
 
 // Nyilvános profil: ennyit lát egy játékosról a barátja vagy az osztálytársa.
@@ -183,9 +183,12 @@ async function social(p, env) {
   }
   let lastResult = null;
   try { lastResult = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
+  const admin = isAdmin(env, p.id);
+  // Az üzemeltető látja, hány jelentett játékos vár moderálásra.
+  const reported = admin ? (await env.DB.prepare("SELECT COUNT(DISTINCT target) AS n FROM reports").first()).n : undefined;
   return json({
     week: wk,
-    me: { ...publicProfile(p, mine ? mine.xp : 0, wk), code: p.code, classId: p.class_id, lastResult, admin: isAdmin(env, p.id) },
+    me: { ...publicProfile(p, mine ? mine.xp : 0, wk), code: p.code, classId: p.class_id, lastResult, admin, reported },
     following: following.map((r) => publicProfile(r, r.wxp, wk)),
     followers: followers.map((r) => publicProfile(r, r.wxp, wk)),
     class: cls,
@@ -372,6 +375,51 @@ async function deleteAccount(p, env) {
   ]);
 }
 
+// ---------- Moderálás (csak az üzemeltetőnek) ----------
+function modRow(r) {
+  return {
+    id: r.id, nick: r.nick, code: r.code, xp: r.xp, joined: dayKey(r.created_at), seen: dayKey(r.updated_at),
+    reports: r.cnt || 0, nickReports: r.nick_cnt || 0, reporters: r.reporters || 0, last: r.last ? dayKey(r.last) : "",
+  };
+}
+const MOD_COLS = "p.*, COUNT(r.id) AS cnt, SUM(r.reason = 'nick') AS nick_cnt, COUNT(DISTINCT r.reporter) AS reporters, MAX(r.created_at) AS last";
+async function adminReports(env) {
+  const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM reports r JOIN players p ON p.id = r.target GROUP BY p.id ORDER BY reporters DESC, last DESC LIMIT 100`).all()).results || [];
+  return json({ players: rows.map(modRow) });
+}
+async function adminFind(env, q) {
+  const s = String(q || "").normalize("NFC").trim().slice(0, 30);
+  if (s.length < 2) throw new HttpError(400, "Legalább 2 karaktert írj be.");
+  const like = "%" + s.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
+  const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM players p LEFT JOIN reports r ON r.target = p.id
+    WHERE p.id = ?1 OR p.code = ?1 OR p.nick LIKE ?2 ESCAPE '\\' GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 30`).bind(s.toUpperCase(), like).all()).results || [];
+  return json({ players: rows.map(modRow) });
+}
+async function adminAct(p, req, env) {
+  const b = await readJson(req);
+  const t = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(String(b.id || "")).first();
+  if (!t) throw new HttpError(404, "Nincs ilyen játékos.");
+  if (b.action === "rename") {
+    // Semleges, egyedi név a barátkóddal, hogy a ligában ne legyen sok egyforma.
+    const nick = "Játékos " + t.code;
+    await env.DB.batch([
+      env.DB.prepare("UPDATE players SET nick = ? WHERE id = ?").bind(nick, t.id),
+      env.DB.prepare("DELETE FROM reports WHERE target = ?").bind(t.id),
+    ]);
+    return json({ ok: true, nick });
+  }
+  if (b.action === "dismiss") {
+    await env.DB.prepare("DELETE FROM reports WHERE target = ?").bind(t.id).run();
+    return json({ ok: true });
+  }
+  if (b.action === "delete") {
+    if (t.id === p.id) throw new HttpError(400, "A saját fiókodat a Beállításokban törölheted.");
+    await deleteAccount(t, env);
+    return json({ ok: true });
+  }
+  throw new HttpError(400, "Ismeretlen művelet.");
+}
+
 // ---------- Online liga: heti csoportok és zárás ----------
 // Ugyanez a szabály van az appban is (zones), a kettőnek egyeznie kell.
 function zones(size, league) {
@@ -462,6 +510,12 @@ async function api(req, env, url) {
   m = path.match(/^\/class\/members\/([A-Z0-9]{8})$/);
   if (method === "DELETE" && m) return kick(p, m[1], env);
   if (method === "POST" && path === "/report") return report(p, req, env);
+  if (path.startsWith("/admin/")) {
+    if (!isAdmin(env, p.id)) throw new HttpError(403, "Ehhez nincs jogosultságod.");
+    if (method === "GET" && path === "/admin/reports") return adminReports(env);
+    if (method === "GET" && path === "/admin/find") return adminFind(env, url.searchParams.get("q"));
+    if (method === "POST" && path === "/admin/player") return adminAct(p, req, env);
+  }
   throw new HttpError(404, "Nincs ilyen végpont.");
 }
 

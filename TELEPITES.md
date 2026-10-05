@@ -67,7 +67,14 @@ Utána nyisd meg: http://localhost:8787
 
 ## Moderálás
 
-A jelentések listája:
+A legegyszerűbb az appból: lépj be az üzemeltetői fiókkal (`ADMIN_IDS`), és nyisd meg ezt: **Profil › Teszt › Jelentések és keresés**. Ha valakit jelentettek, a Teszt gombon piros szám jelzi. Ott ezeket teheted:
+- **Átnevezés:** a becenév „Játékos XXXXXX” lesz, a jelentései törlődnek.
+- **Rendben van:** lezárod a jelentéseket.
+- **Fiók törlése:** nem vonható vissza.
+
+Becenévre vagy barátkódra kereshetsz is, például ha valaki e-mailben jelez egy játékost.
+
+Parancssorból is megy. A jelentések listája:
 ```
 npx wrangler d1 execute kodkigyo --remote --command "SELECT r.created_at, r.reason, p.id, p.nick FROM reports r JOIN players p ON p.id = r.target ORDER BY r.created_at DESC LIMIT 50"
 ```
