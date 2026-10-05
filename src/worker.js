@@ -115,11 +115,31 @@ function publicProfile(p, weekXp, wk) {
   };
 }
 
+// Cloudflare Turnstile robotszűrő a fiók létrehozásához. Csak akkor kapcsol be, ha a nyilvános
+// kulcs (vars.TURNSTILE_SITEKEY) és a titkos kulcs (TURNSTILE_SECRET titok) is be van állítva.
+const captchaOn = (env) => Boolean(env.TURNSTILE_SITEKEY && env.TURNSTILE_SECRET);
+async function checkCaptcha(env, token, ip) {
+  if (typeof token !== "string" || !token || token.length > 2048) throw new HttpError(400, "Előbb várd meg a robotszűrő ellenőrzését!");
+  const form = new FormData();
+  form.append("secret", env.TURNSTILE_SECRET);
+  form.append("response", token);
+  if (ip !== "local") form.append("remoteip", ip);
+  let ok = false;
+  try {
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form });
+    ok = Boolean((await r.json()).success);
+  } catch (e) {
+    throw new HttpError(503, "A robotszűrő most nem érhető el. Próbáld újra kicsit később!");
+  }
+  if (!ok) throw new HttpError(400, "A robotszűrő ellenőrzése nem sikerült. Próbáld újra!");
+}
+
 // ---------- Végpontok ----------
 async function register(req, env) {
   const body = await readJson(req);
   const nick = cleanName(body.nick, 2, 20, "becenév");
   const ip = req.headers.get("cf-connecting-ip") || "local";
+  if (captchaOn(env)) await checkCaptcha(env, body.captcha, ip);
   // Egy iskola minden gépe gyakran ugyanazon az IP-címen van, ezért egy egész évfolyamnyi regisztrációt engedünk óránként.
   await rateLimit(env, "reg:" + (await sha256("kodkigyo:" + ip)).slice(0, 24), 150, 3600000);
   const secret = randomCode(16), hash = await sha256(secret), now = Date.now();
@@ -425,7 +445,7 @@ async function hourly(env) {
 async function api(req, env, url) {
   const path = url.pathname.slice(4); // "/api" levágva
   const method = req.method;
-  if (method === "GET" && path === "/health") return json({ app: "kodkigyo", ok: true });
+  if (method === "GET" && path === "/health") return json({ app: "kodkigyo", ok: true, captcha: captchaOn(env) ? env.TURNSTILE_SITEKEY : "" });
   if (method === "POST" && path === "/register") return register(req, env);
   const p = await authenticate(req, env);
   if (method === "GET" && path === "/social") return social(p, env);

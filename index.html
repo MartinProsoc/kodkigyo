@@ -400,6 +400,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .gate .fine{font-size:13px;color:var(--ink-soft);line-height:1.5}
 .gate .fine .link{font-size:13px;padding:0;min-height:0}
 .gate-back{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.hcheck{display:flex;justify-content:center;max-width:100%;overflow:hidden}
+.hcheck.ask{min-height:65px}
 .swatches{display:flex;gap:6px;margin-top:8px}
 .swatches i{width:18px;height:18px;border-radius:6px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.08)}
 /* Tesztpanel (csak az üzemeltetőnek) */
@@ -2045,6 +2047,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const r = await fetch("/api/health", { cache: "no-store" });
       const j = r.ok ? await r.json() : null;
       if (!j || j.app !== "kodkigyo") return false;
+      NET.captcha = typeof j.captcha === "string" ? j.captcha : "";
     } catch (e) { return false; }
     NET.mode = "server";
     try { NET.token = localStorage.getItem(ACCOUNT_KEY); } catch (e) {}
@@ -2114,8 +2117,65 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       catch (e) { if (e.status === 401) { forgetAccount(); renderSocial(); } }
     }, 180000);
   }
-  async function createAccount(nick) {
-    const r = await api("POST", "register", { nick });
+  // Robotszűrő a fiók létrehozásához (Cloudflare Turnstile). Csak akkor töltődik be, ha a szerveren be van
+  // állítva (NET.captcha = a nyilvános kulcs). Általában láthatatlan; gyanús esetben egy jelölőnégyzetet mutat.
+  let tsLoading = null;
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    if (!tsLoading) tsLoading = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true;
+      s.onload = () => (window.turnstile ? res(window.turnstile) : rej(new Error("turnstile")));
+      s.onerror = () => { s.remove(); tsLoading = null; rej(new Error("turnstile")); };
+      document.head.append(s);
+    });
+    return tsLoading;
+  }
+  function humanCheck() {
+    const box = el("div", { class: "hcheck" });
+    let id = null, token = "", failed = "", mounting = false, waiters = []; // failed: "load" vagy "check"
+    const settle = () => { const w = waiters; waiters = []; w.forEach((f) => f()); };
+    function prepare() {
+      if (!NET.captcha || id != null || mounting || !box.isConnected) return;
+      mounting = true;
+      failed = "";
+      loadTurnstile().then((ts) => {
+        mounting = false;
+        if (!box.isConnected || id != null) return;
+        const theme = document.documentElement.getAttribute("data-theme");
+        id = ts.render(box, {
+          sitekey: NET.captcha, language: "hu", appearance: "interaction-only", "response-field": false,
+          size: box.clientWidth && box.clientWidth < 300 ? "compact" : "normal",
+          theme: theme === "dark" || theme === "light" ? theme : "auto",
+          callback: (t) => { token = t; failed = ""; box.classList.remove("ask"); settle(); },
+          "expired-callback": () => { token = ""; },
+          "error-callback": () => { token = ""; failed = "check"; settle(); },
+          "before-interactive-callback": () => box.classList.add("ask"),
+        });
+      }, () => { mounting = false; failed = "load"; settle(); });
+    }
+    return {
+      box, prepare,
+      // A kész ellenőrzőkód; ha még nincs meg, legfeljebb 20 másodpercig várunk rá (közben lehet kattintani).
+      async get(onWait) {
+        if (!NET.captcha) return "";
+        if (!token) {
+          prepare();
+          if (onWait) onWait(box.classList.contains("ask") ? "Jelöld be a fenti ellenőrző mezőt!" : "Egy pillanat, ellenőrizzük, hogy nem vagy robot…");
+          await new Promise((res) => { waiters.push(res); setTimeout(res, 20000); });
+        }
+        if (!token) throw new Error(failed === "load" ? "Nem sikerült betölteni a robotszűrőt. Ellenőrizd az internetet, és próbáld újra!"
+          : failed === "check" ? "A robotszűrő ellenőrzése nem sikerült. Frissítsd az oldalt, és próbáld újra!" : "Az ellenőrzés nem fejeződött be. Próbáld újra!");
+        return token;
+      },
+      // Egy kód csak egyszer használható: sikertelen próbálkozás után újat kérünk.
+      reset() { token = ""; if (id != null && window.turnstile) try { window.turnstile.reset(id); } catch (e) {} },
+      remove() { if (id != null && window.turnstile) try { window.turnstile.remove(id); } catch (e) {} id = null; settle(); },
+    };
+  }
+  async function createAccount(nick, captcha) {
+    const r = await api("POST", "register", captcha ? { nick, captcha } : { nick });
     NET.token = r.token;
     try { localStorage.setItem(ACCOUNT_KEY, r.token); } catch (e) {}
     NET.canWrite = true;
@@ -3070,13 +3130,18 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function accountCard() {
     const nick = el("input", { class: "search", id: "accNick", maxlength: "20", placeholder: "Becenév, pl. Kódmester", autocomplete: "off", value: prefs.nick || "", "aria-label": "Becenév" });
     const msg = el("p", { class: "note", "aria-live": "polite" });
-    const go1 = (e) => busy(e.currentTarget, msg, async () => { await createAccount(nick.value); sfx("coin"); render(); toast("Kész a fiókod! Mostantól az online ligában versenyzel."); });
+    const check = humanCheck();
+    const go1 = (e) => busy(e.currentTarget, msg, async () => {
+      try { await createAccount(nick.value, await check.get((t) => { msg.textContent = t; })); }
+      catch (err) { check.reset(); throw err; }
+      check.remove(); sfx("coin"); render(); toast("Kész a fiókod! Mostantól az online ligában versenyzel.");
+    });
     nick.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); nick.nextSibling && nick.parentNode.querySelector("button").click(); } });
     return el("section", { class: "card account-card" },
       el("div", { class: "card-head" }, el("h3", null, "Online liga és barátok")),
       el("p", { class: "muted small" }, "Hozz létre fiókot: bekerülsz a közös online ligába, követheted a barátaidat, csatlakozhatsz az osztályodhoz, és a haladásod minden eszközödön megmarad. Csak becenevet kérünk, e-mail címet nem. Ne a teljes neved add meg!"),
       el("div", { class: "row" }, nick, el("button", { class: "btn blue", type: "button", onclick: go1 }, "Fiók létrehozása")),
-      msg,
+      check.box, msg,
       el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"));
   }
   function loginSheet() {
@@ -3172,7 +3237,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // ---------- Kötelező fiók: üdvözlő képernyő ----------
   // A kodkigyo.hu-n a játékhoz fiók kell, ehhez egy becenév elég. Ha a szerver nem érhető el, vagy a
   // Kódkígyót fájlként nyitják meg, fiók nélkül, offline módban indul, és legközelebb kéri a becenevet.
-  let gateEl = null, gatePending = false; // gatePending: indulás, még nem tudjuk, elérhető-e a szerver
+  let gateEl = null, gateCheck = null, gatePending = false; // gatePending: indulás, még nem tudjuk, elérhető-e a szerver
   function needGate() { return (NET.mode === "server" || gatePending) && !NET.token; }
   function syncGate() {
     const want = needGate() && prefs.view !== "legal";
@@ -3181,20 +3246,27 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (gateEl) {
       const b = gateEl.querySelector(".gate-go");
       if (!b.dataset.busy) { b.disabled = NET.mode !== "server"; b.textContent = NET.mode === "server" ? "Kezdjük!" : "Kapcsolódás…"; }
+      // A robotszűrő már gépelés közben lefut, így a gombnyomáskor általában kész.
+      if (NET.mode === "server") gateCheck.prepare();
     }
   }
   function openGate() {
     const nick = el("input", { class: "search", id: "gateNick", maxlength: "20", placeholder: "Beceneved, pl. Kódmester", autocomplete: "off", spellcheck: "false", "aria-label": "Becenév", value: prefs.nick || "" });
     const msg = el("p", { class: "note", "aria-live": "polite" });
     const goBtn = el("button", { class: "btn wide gate-go", type: "submit" }, "Kezdjük!");
-    const form = el("form", { novalidate: true }, nick, el("p", { class: "fine" }, "Becenevet adj meg, ne a teljes neved. Ezt látják a többiek a ligában."), msg, goBtn);
+    const check = (gateCheck = humanCheck());
+    const form = el("form", { novalidate: true }, nick, el("p", { class: "fine" }, "Becenevet adj meg, ne a teljes neved. Ezt látják a többiek a ligában."), check.box, msg, goBtn);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       if (NET.mode !== "server" || goBtn.dataset.busy) return;
       goBtn.dataset.busy = "1";
-      busy(goBtn, msg, () => createAccount(nick.value)).then((ok) => {
+      busy(goBtn, msg, async () => {
+        const captcha = await check.get((t) => { msg.textContent = t; });
+        msg.textContent = "";
+        await createAccount(nick.value, captcha);
+      }).then((ok) => {
         delete goBtn.dataset.busy;
-        if (!ok) { nick.focus(); return; }
+        if (!ok) { check.reset(); nick.focus(); return; }
         closeGate();
         render();
         sfx("win");
@@ -3219,8 +3291,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function closeGate() {
     if (!gateEl) return;
+    gateCheck.remove();
     gateEl.remove();
     gateEl = null;
+    gateCheck = null;
     appEl.inert = false;
     tabbar.inert = false;
   }
@@ -3311,7 +3385,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("Adatkezelő: ", val(LEGAL.operator, "üzemeltető neve"), ". Kapcsolat: ", contact(), "."),
         el("h3", null, "A saját eszközödön tárolt adatok"),
         p("A haladásod (XP, széria, leckeeredmények, drágakövek, küldetések, eredmények, az elrontott feladatok listája) egy példányát és a beállításaidat (hang, téma, napi cél) a saját böngésződ is tárolja, hogy a Kódkígyó gyorsan és kapcsolat nélkül is működjön. Ha a szerver épp nem érhető el, vagy a Kódkígyót fájlként nyitod meg, fiók nélkül, offline módban is tanulhatsz: ilyenkor az adataid csak a böngésződben vannak, és nem jutnak el hozzánk."),
-        p("A Kódkígyó nem használ analitikát, hirdetést vagy követőkódot. A betűtípusokat és a hangokat maga az oldal tartalmazza, így megnyitáskor semmit nem tölt be külső szolgáltatótól."),
+        p("A Kódkígyó nem használ analitikát, hirdetést vagy követőkódot. A betűtípusokat és a hangokat maga az oldal tartalmazza, így külső szolgáltatótól csak a fiók létrehozásakor használt robotszűrőt tölti be (lásd lent)."),
         p("A weboldalt a tárhelyszolgáltató (", val(LEGAL.host, "tárhelyszolgáltató neve"), ") szolgálja ki. A kérések kiszolgálásához és a támadások kiszűréséhez kezeli az IP-címedet és a böngésződ technikai adatait, a saját ", ext("https://www.cloudflare.com/privacypolicy/", "adatvédelmi szabályzata"), " szerint."),
         el("h3", null, "A fiókod"),
         p("A kodkigyo.hu használatához fiók kell, de csak egy becenevet kérünk hozzá: e-mail címet, jelszót vagy valódi nevet nem. A fiók adatait a Cloudflare D1 adatbázisában, az Európai Unió területén tároljuk:"),
@@ -3323,6 +3397,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           "a jelentések, ha te jelentesz valakit, vagy téged jelentenek."),
         p("A becenevedet és a statisztikáidat látják: a heti ligacsoportod tagjai (hetente legfeljebb 30, a ligád szerint összesorolt játékos), a barátaid, a követőid és az osztálytársaid. Az osztály létrehozója, általában a tanár, látja az osztály tagjait, és eltávolíthat valakit az osztályból."),
         p("Az IP-címedet nem tároljuk. A regisztrációk számának korlátozásához legfeljebb egy óráig egy belőle képzett, visszafejthetetlen kódot (hash) őrzünk."),
+        p("Hogy senki ne tudjon tömegesen, programmal fiókokat létrehozni, a fiók létrehozásakor a Cloudflare Turnstile robotszűrője ellenőrzi, hogy ember használja-e a böngészőt. Ehhez a Cloudflare a challenges.cloudflare.com címről betölt egy ellenőrzőt, amely az IP-címedet, a böngésződ technikai adatait és a használat jellemzőit vizsgálja. Az eredményt és az IP-címedet a szerverünk a Cloudflare-nek ellenőrzésre továbbítja. A Cloudflare ezeket az adatokat csak a robotszűréshez használja, hirdetéshez vagy követéshez nem, a saját ", ext("https://www.cloudflare.com/turnstile-privacy-policy/", "Turnstile adatvédelmi tájékoztatója"), " szerint. Az ellenőrzés általában láthatatlan, néha egy jelölőnégyzetet kell bepipálnod."),
         p("A fiókot addig őrizzük, amíg nem törlöd. Ha 12 hónapig nem használod, automatikusan töröljük. Ha egy fiókkal egyetlen XP-t sem szereztél, és 30 napig nem nyitottad meg vele a Kódkígyót, azt is töröljük, hogy a csak kipróbált fiókok ne maradjanak meg. A heti XP-adatokat 8 hétig, a jelentéseket 90 napig őrizzük. A Cloudflare adatfeldolgozóként, a szerződési feltételei szerint kezeli az adatokat."),
         el("h3", null, "Ha a Kódkígyót a claude.ai-on használod"),
         p("A barátok és a ranglista miatt az online módban adatokat tárolunk az Anthropic (claude.ai) artifact-tárhelyén:"),
@@ -3330,7 +3405,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           "a nyilvános játékprofilodat, amelyet a Kódkígyó többi felhasználója is lát: összes és heti XP, széria, liga, a teljesített leckék és eredmények száma, a barátkódod, kiket követsz, mikor csatlakoztál és Tekla kinézete."),
         p("A neved és a profilképed a claude.ai-fiókodból jelenik meg a többieknek, ezeket a Kódkígyó nem tárolja. A claude.ai használatára az Anthropic feltételei és ", ext("https://www.anthropic.com/legal/privacy", "adatvédelmi tájékoztatója"), " vonatkozik."),
         el("h3", null, "Cél és jogalap"),
-        p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont)."),
+        p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont). A regisztrációs korlát és a robotszűrés célja a szolgáltatás és a felhasználók védelme a visszaélésekkel szemben. Ennek jogalapja a jogos érdekünk (GDPR 6. cikk (1) bekezdés f) pont)."),
         el("h3", null, "A jogaid"),
         p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A helyben tárolt adatokat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
         p("Panasszal a Nemzeti Adatvédelmi és Információszabadság Hatósághoz fordulhatsz (1055 Budapest, Falk Miksa utca 9–11., ", ext("https://naih.hu", "naih.hu"), "), illetve bírósághoz."),
@@ -3344,7 +3419,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
             el("tr", null, el("td", null, el("code", null, STORE_KEY)), el("td", null, "a haladásodat és a jutalmaidat"), el("td", null, "amíg nem törlöd")),
             el("tr", null, el("td", null, el("code", null, PREF_KEY)), el("td", null, "a beállításaidat: hang, téma, megnyitott fül, becenév"), el("td", null, "amíg nem törlöd")),
             el("tr", null, el("td", null, el("code", null, ACCOUNT_KEY)), el("td", null, "a fiókod belépőkulcsát, csak ha létrehoztál fiókot"), el("td", null, "amíg ki nem jelentkezel, vagy nem törlöd a fiókot"))))),
-        p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével.")),
+        p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével."),
+        p("A fiók létrehozásakor megjelenő robotszűrő (Cloudflare Turnstile) a Cloudflare saját keretében fut. A működéséhez szükséges adatokat a Cloudflare kezeli, kizárólag biztonsági célból (lásd az Adatvédelem részt).")),
       sec("feltetelek", "Felhasználási feltételek",
         ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",

@@ -44,6 +44,15 @@ Ettől kezdve minden `main` ágra feltöltött commit után a Cloudflare magát�
 3. Várd meg, amíg a Cloudflare jelzi, hogy a domain aktív. Ez pár perctől néhány óráig tarthat.
 4. A `wrangler.jsonc` végén vedd ki a megjegyzésből a `routes` sort, majd töltsd fel a GitHubra, vagy futtasd: `npm run deploy`.
 
+## 4. E-mail és robotszűrő
+
+- **E-mail:** a support@kodkigyo.hu címet a Cloudflare Email Routing továbbítja a kodkigyosupport@gmail.com-ra (Email › Email Routing › Routing rules). A Catch-all maradjon kikapcsolva.
+- **Robotszűrő (Turnstile):** a fiók létrehozását a Cloudflare Turnstile védi a tömeges, gépi regisztráció ellen. Beállítása:
+  1. Cloudflare irányítópult › **Turnstile** › **Add widget**. Név: `Kódkígyó`, hostname: `kodkigyo.hu`, `www.kodkigyo.hu` és `kodkigyo.puncsmartin.workers.dev`, Widget mode: **Managed**.
+  2. A **Site Key** kerüljön a `wrangler.jsonc`-ben a `TURNSTILE_SITEKEY` mezőbe.
+  3. A **Secret Key** a Worker beállításaiba kerül: Workers & Pages › `kodkigyo` › Settings › Variables and Secrets › **Add**. Type: **Secret**, név: `TURNSTILE_SECRET`.
+  4. Töltsd fel a módosítást a GitHubra. A robotszűrő csak akkor kapcsol be, ha mindkét kulcs meg van adva, addig a regisztráció nélküle működik.
+
 ## Frissítés
 
 Ha a `index.html` vagy a `src/worker.js` változik, elég feltölteni a GitHubra. Ha új fájl kerül a `migrations/` mappába, **a Push előtt** futtasd a gépedről: `npm run db:remote`. Különben az új szerverkód a hiányzó táblák miatt hibát ad, amíg az adatbázis nem frissül.

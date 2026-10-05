@@ -19,8 +19,10 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Az üzemeltető fiókazonosítója(i) vesszővel elválasztva: nekik az app tesztpanelt mutat (Profil › Teszt).
-  "vars": { "ADMIN_IDS": "54Z52J8H" },
+  // ADMIN_IDS: az üzemeltető fiókazonosítója(i) vesszővel elválasztva; nekik az app tesztpanelt mutat (Profil › Teszt).
+  // TURNSTILE_SITEKEY: a Cloudflare Turnstile robotszűrő nyilvános kulcsa. A titkos kulcs TURNSTILE_SECRET néven,
+  // titkosított változóként (Secret) a Worker beállításaiban van. A robotszűrő csak akkor él, ha mindkettő meg van adva.
+  "vars": { "ADMIN_IDS": "54Z52J8H", "TURNSTILE_SITEKEY": "" },
   // Óránként lezárja a véget ért heti ligacsoportokat, és törli a lejárt adatokat.
   "triggers": { "crons": ["7 * * * *"] },
   // Saját domain: a Cloudflare a DNS-rekordokat és a tanúsítványt magától létrehozza hozzá.
