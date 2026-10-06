@@ -1,26 +1,17 @@
 // Kódkígyó szerver: Cloudflare Worker + D1.
 // A /api/* kéréseket ez kezeli, minden mást a statikus fájlok (public/) szolgálnak ki.
+//
+// A játékos haladása és vagyona (XP, széria, drágakő, szívek, vásárlások, ládák) a szerveren dől el: az app csak
+// azt küldi el, mit csinált (POST /api/act), és a szerver az app saját szabályaival (src/rules.gen.js, az index.html
+// RULES részeiből generálva) számolja ki az eredményt. Az app által küldött mentést vagy statisztikát nem veszi át.
+import { RULES } from "./rules.gen.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const SKINS = ["classic", "gold", "night", "coral", "ice"];
-// Tekla kiegészítői és helyük (ugyanaz, mint az appban az ACCS): helyenként legfeljebb egy lehet rajta.
-const ACCS = { bowtie: "neck", cap: "head", glasses: "face", shades: "face", headphones: "head", wizard: "head", crown: "head" };
-function cleanAcc(v) {
-  const out = [], slots = new Set();
-  for (const id of String(v || "").split(",").slice(0, 6)) {
-    if (ACCS[id] && !slots.has(ACCS[id])) { out.push(id); slots.add(ACCS[id]); }
-  }
-  return out.join(",");
-}
 const LEAGUE_MAX = 9;
 const MAX_BODY = 300000;
 const DAY = 86400000;
 const WEEKLY_CAP = 5000;
-// Csalás elleni XP-korlátok. Egy lecke 10–15 XP (dupla XP-vel 30), és legalább egy perc, ezért:
-const XP_PER_MIN = 30;      // percenként legfeljebb ennyi XP gyűlhet
-const XP_BURST = 600;       // egy szinkronnál legfeljebb ennyi (hosszabb szünet után is)
-const FIRST_SYNC_XP = 5000; // a fiók előtt, offline gyűjtött XP-ből legfeljebb ennyi kerül át
-const DAY_XP = 750;         // a heti ligában a hét minden napjára legfeljebb ennyi XP jut
+const DAY_XP = 750;         // a heti ligában a hét minden napjára legfeljebb ennyi XP jut (biztonsági korlát)
 const GEMS_SUSPICIOUS = 100000; // ennyi drágakő tisztességesen nem gyűlhet össze
 const GROUP_SIZE = 30;
 const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
@@ -60,7 +51,6 @@ function safeEqual(a, b) {
   return r === 0;
 }
 const int = (v, max) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0; };
-const isDay = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 // A hetek magyar idő szerint hétfőn kezdődnek, ugyanúgy, mint az appban.
 const bpDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -212,82 +202,92 @@ async function social(p, env) {
   });
 }
 
+// Csak a becenév változtatható így. A statisztikát (XP, széria…) a szerver a saját állapotából írja,
+// a régi appok által küldött "stats" mezőt figyelmen kívül hagyjuk.
 async function putMe(p, req, env) {
   const b = await readJson(req);
-  const now = Date.now();
-  const sets = [], binds = [];
-  if (b.nick != null) { sets.push("nick = ?"); binds.push(cleanName(b.nick, 2, 20, "becenév")); }
-  const s = b.stats;
-  if (s && typeof s === "object") {
-    // Csalás elleni korlát: az összes XP percenként legfeljebb XP_PER_MIN-nel nőhet. Az első szinkronnál
-    // a fiók előtt, offline gyűjtött XP-t is elfogadjuk (legfeljebb FIRST_SYNC_XP-t).
-    const allow = p.seeded ? Math.min(XP_BURST, Math.max(0, now - p.stats_at) / 60000 * XP_PER_MIN) : FIRST_SYNC_XP;
-    const xp = Math.min(int(s.xp, 10000000), p.xp + Math.floor(allow));
-    // A heti (liga-) XP csak annyival nőhet, amennyivel ebben a szinkronban az összes XP nőtt.
-    // Így nem lehet a heti XP-t úgy felhúzni, hogy közben semmit sem tanult (2026-10-06-i eset).
-    let budget = Math.max(0, xp - p.xp);
-    sets.push("xp = ?", "streak = ?", "best_streak = ?", "last_day = ?", "lessons = ?", "ach = ?", "skin = ?", "stats_at = ?", "seeded = 1");
-    binds.push(Math.max(xp, 0), int(s.streak, 5000), int(s.bestStreak, 5000), isDay(s.lastDay) ? s.lastDay : p.last_day,
-      int(s.lessons, 500), int(s.ach, 1000), SKINS.includes(s.skin) ? s.skin : "classic", now);
-    if (typeof s.acc === "string") { sets.push("acc = ?"); binds.push(cleanAcc(s.acc)); }
-    // A ligát mindig a szerver dönti el a heti zárásnál, az app által küldött értéket nem vesszük át.
-    const wk = weekKey(now), prev = addDays(wk, -7);
-    const weeks = [];
-    if (s.weekKey === wk || s.weekKey === prev) weeks.push([s.weekKey, int(s.weekXp, WEEKLY_CAP)]);
-    if (s.prevWeek && typeof s.prevWeek === "object" && s.prevWeek.key === prev) weeks.push([prev, int(s.prevWeek.xp, WEEKLY_CAP)]);
-    // A hét eddig eltelt napjai (hétfő = 1): naponta legfeljebb DAY_XP gyűlhet a ligában.
-    const dayIdx = Math.round((Date.parse(dayKey(now)) - Date.parse(wk)) / DAY) + 1;
-    for (const [k, v] of weeks) {
-      const cur = await env.DB.prepare("SELECT xp FROM weekly WHERE player_id = ? AND week_key = ?").bind(p.id, k).first();
-      const had = cur ? cur.xp : 0;
-      const step = Math.min(Math.max(0, Math.min(v, DAY_XP * (k === wk ? dayIdx : 7)) - had), budget);
-      budget -= step;
-      const next = had + step;
-      if (next !== had) {
-        await env.DB.prepare("INSERT INTO weekly (player_id, week_key, xp) VALUES (?1, ?2, ?3) ON CONFLICT (player_id, week_key) DO UPDATE SET xp = ?3")
-          .bind(p.id, k, next).run();
-      }
-    }
+  if (b.nick != null) {
+    await env.DB.prepare("UPDATE players SET nick = ?, updated_at = ? WHERE id = ?").bind(cleanName(b.nick, 2, 20, "becenév"), Date.now(), p.id).run();
   }
-  sets.push("updated_at = ?");
-  binds.push(now);
-  await env.DB.prepare(`UPDATE players SET ${sets.join(", ")} WHERE id = ?`).bind(...binds, p.id).run();
-  const grouped = s && typeof s === "object" ? await ensureGroup(env, p.id, weekKey(now)) : false;
-  return json({ ok: true, grouped });
+  return json({ ok: true, grouped: false });
 }
 
-async function getProgress(p, env) {
+// ---------- A játék állapota: a szerver a döntő ----------
+// Tesztpanel: az üzemeltetőnek (ADMIN_IDS), illetve helyi teszteléskor (wrangler dev --var DEV_MODE:1) mindenkinek.
+const devAllowed = (env, p) => isAdmin(env, p.id) || env.DEV_MODE === "1";
+async function loadState(env, p) {
   const row = await env.DB.prepare("SELECT data, updated_at FROM progress WHERE player_id = ?").bind(p.id).first();
-  if (!row) return json({ data: null, updatedAt: 0 });
-  let data = null;
-  try { data = JSON.parse(row.data); } catch {}
-  return json({ data, updatedAt: row.updated_at });
+  let raw = null;
+  if (row) { try { raw = JSON.parse(row.data); } catch {} }
+  const state = RULES.normalize(raw);
+  if (!raw) state.joined = dayKey(p.created_at);
+  state.owner = p.id;
+  state.code = p.code;
+  return { state, ver: row ? row.updated_at : null };
 }
-// Ugyanaz a szabály, mint az appban (remoteWins): a haladás törlése új korszakot kezd, az nyer;
-// különben a több XP. Így egy másik eszköz kevesebb haladással nem írhatja felül a mentést.
-const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-function moreProgress(a, b) {
-  if (num(a.epoch) !== num(b.epoch)) return num(a.epoch) > num(b.epoch);
-  return num(a.xp) > num(b.xp);
+async function stateContext(env, p) {
+  const follows = (await env.DB.prepare("SELECT followee FROM follows WHERE follower = ? LIMIT 300").bind(p.id).all()).results || [];
+  let last = null;
+  try { last = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
+  // A tempóellenőrzés élesben mindig be van kapcsolva; csak a helyi böngészős tesztekhez kapcsolható ki (RELAXED_PACE).
+  return { tier: p.league, last, follows: follows.map((f) => f.followee), dev: devAllowed(env, p), strict: env.RELAXED_PACE !== "1" };
 }
-async function putProgress(p, req, env) {
-  const b = await readJson(req);
-  if (!b.data || typeof b.data !== "object") throw new HttpError(400, "Hibás mentés.");
-  const text = JSON.stringify(b.data);
-  if (text.length > 250000) throw new HttpError(413, "Túl nagy mentés.");
-  const row = await env.DB.prepare("SELECT data, updated_at FROM progress WHERE player_id = ?").bind(p.id).first();
-  if (row) {
-    let cur = null;
-    try { cur = JSON.parse(row.data); } catch {}
-    if (cur && moreProgress(cur, b.data)) {
-      return json({ error: "A szerveren több haladás van egy másik eszközödről.", conflict: true, data: cur, updatedAt: row.updated_at }, 409);
+// Egy művelet lefuttatása a szabályokkal, és a mentés optimista zárolással: ha közben egy másik kérés (pl. egy
+// másik eszköz) is írt, újraolvassuk az állapotot, és újra lefuttatjuk a műveletet.
+async function runState(env, p, type, payload) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const [{ state, ver }, ctx] = await Promise.all([loadState(env, p), stateContext(env, p)]);
+    const before = JSON.stringify(state);
+    let out, next, stats;
+    // A szabályok egy közös példányon futnak: a use() és az eredmény kiolvasása között nincs await.
+    RULES.use(state);
+    try {
+      out = RULES.runAction(type, payload, ctx);
+      next = RULES.state;
+      stats = RULES.publicStats();
+    } catch (e) {
+      if (e instanceof RULES.RuleError) throw new HttpError(400, e.message);
+      throw e;
     }
+    const text = JSON.stringify(next);
+    if (text === before && ver != null) return { state: next, ...out };
+    if (text.length > 250000) throw new HttpError(413, "Túl nagy mentés.");
+    const at = Math.max(Date.now(), (ver || 0) + 1);
+    const res = ver == null
+      ? await env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT (player_id) DO NOTHING").bind(p.id, text, at).run()
+      : await env.DB.prepare("UPDATE progress SET data = ?, updated_at = ? WHERE player_id = ? AND updated_at = ?").bind(text, at, p.id, ver).run();
+    if (!res.meta.changes) continue;
+    await syncPlayer(env, p, stats);
+    return { state: next, ...out };
   }
-  const at = int(b.updatedAt, 1e13) || Date.now();
-  await env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (player_id) DO UPDATE SET data = ?2, updated_at = ?3")
-    .bind(p.id, text, at).run();
-  await env.DB.prepare("UPDATE players SET updated_at = ? WHERE id = ?").bind(Date.now(), p.id).run();
-  return json({ ok: true });
+  throw new HttpError(409, "Épp mentés folyik egy másik eszközödről. Próbáld újra!");
+}
+// A nyilvános profil (players) és a heti liga-XP (weekly) a szerver állapotából.
+async function syncPlayer(env, p, st) {
+  const now = Date.now(), wk = weekKey(now);
+  await env.DB.prepare("UPDATE players SET xp = ?, streak = ?, best_streak = ?, last_day = ?, lessons = ?, ach = ?, skin = ?, acc = ?, updated_at = ? WHERE id = ?")
+    .bind(st.xp, st.streak, st.bestStreak, st.lastDay, st.lessons, st.ach, st.skin, st.acc, now, p.id).run();
+  if (st.weekKey !== wk) return;
+  const dayIdx = Math.round((Date.parse(dayKey(now)) - Date.parse(wk)) / DAY) + 1;
+  const xp = Math.min(st.weekXp, DAY_XP * dayIdx, WEEKLY_CAP);
+  const cur = await env.DB.prepare("SELECT xp FROM weekly WHERE player_id = ? AND week_key = ?").bind(p.id, wk).first();
+  if (!cur || cur.xp !== xp) {
+    await env.DB.prepare("INSERT INTO weekly (player_id, week_key, xp) VALUES (?1, ?2, ?3) ON CONFLICT (player_id, week_key) DO UPDATE SET xp = ?3")
+      .bind(p.id, wk, xp).run();
+  }
+  if (xp > 0) await ensureGroup(env, p.id, wk);
+}
+const stateReply = (r) => json({ state: r.state, notices: r.notices || [], result: r.result || {} });
+async function act(p, req, env) {
+  const b = await readJson(req);
+  const type = typeof b.type === "string" ? b.type.slice(0, 20) : "";
+  return stateReply(await runState(env, p, type, b));
+}
+// A régi appoknak (amíg egy nyitott lapon még a régi kód fut): a mentést nem vesszük át, a szerver állapotát küldjük vissza.
+async function legacyProgress(p, env, put) {
+  const r = await runState(env, p, "tick", {});
+  if (put) return json({ error: "A haladásodat mostantól a szerver menti.", conflict: true, data: r.state, updatedAt: r.state.updatedAt }, 409);
+  return json({ data: r.state, updatedAt: r.state.updatedAt });
 }
 
 async function follow(p, req, env) {
@@ -437,15 +437,18 @@ async function adminFind(env, q) {
     WHERE p.id = ?2 OR p.code = ?2 OR p.nick LIKE ?3 ESCAPE '\\' GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 30`).bind(weekKey(Date.now()), s.toUpperCase(), like).all()).results || [];
   return json({ players: rows.map(modRow) });
 }
-// Nullázás csalás után: a heti XP 0, a mentés a kezdőállapotra áll (új korszakkal, így az app minden
-// eszközön ezt tölti be, és a régi, meghamisított mentés nem írhatja felül). A fiók és a becenév marad.
+// Nullázás csalás után: a heti XP 0, a mentés a kezdőállapotra áll (új korszakkal). A fiók, a becenév és a
+// követések maradnak. A legutóbbi ligaeredményt már „látottnak” jelöljük, hogy a jutalmát ne kapja meg újra.
 async function resetPlayer(env, t) {
   const now = Date.now(), wk = weekKey(now);
-  const data = JSON.stringify({ v: 2, epoch: now, owner: t.id, gems: 50, joined: dayKey(t.created_at), code: t.code, updatedAt: now });
+  const s = RULES.fresh();
+  let last = null;
+  try { last = t.last_result ? JSON.parse(t.last_result) : null; } catch {}
+  Object.assign(s, { epoch: now, owner: t.id, code: t.code, joined: dayKey(t.created_at), updatedAt: now, league: t.league, seenResult: last ? last.week : null });
   await env.DB.batch([
     env.DB.prepare("UPDATE weekly SET xp = 0 WHERE player_id = ? AND week_key >= ?").bind(t.id, addDays(wk, -7)),
-    env.DB.prepare("UPDATE players SET xp = 0, streak = 0, best_streak = 0, last_day = NULL, lessons = 0, ach = 0, skin = 'classic', acc = '', stats_at = ?2, seeded = 1, updated_at = ?2 WHERE id = ?1").bind(t.id, now),
-    env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (player_id) DO UPDATE SET data = ?2, updated_at = ?3").bind(t.id, data, now),
+    env.DB.prepare("UPDATE players SET xp = 0, streak = 0, best_streak = 0, last_day = NULL, lessons = 0, ach = 0, skin = 'classic', acc = '', updated_at = ?2 WHERE id = ?1").bind(t.id, now),
+    env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (player_id) DO UPDATE SET data = ?2, updated_at = ?3").bind(t.id, JSON.stringify(s), now),
     env.DB.prepare("DELETE FROM reports WHERE target = ?").bind(t.id),
   ]);
 }
@@ -557,8 +560,10 @@ async function api(req, env, url) {
   if (method === "GET" && path === "/social") return social(p, env);
   if (method === "PUT" && path === "/me") return putMe(p, req, env);
   if (method === "DELETE" && path === "/me") { await deleteAccount(p, env); return json({ ok: true }); }
-  if (method === "GET" && path === "/progress") return getProgress(p, env);
-  if (method === "PUT" && path === "/progress") return putProgress(p, req, env);
+  if (method === "GET" && path === "/state") return stateReply(await runState(env, p, "tick", {}));
+  if (method === "POST" && path === "/act") return act(p, req, env);
+  if (method === "GET" && path === "/progress") return legacyProgress(p, env, false);
+  if (method === "PUT" && path === "/progress") return legacyProgress(p, env, true);
   if (method === "POST" && path === "/follow") return follow(p, req, env);
   let m = path.match(/^\/follow\/([A-Z0-9]{8})$/);
   if (method === "DELETE" && m) return unfollow(p, m[1], env);

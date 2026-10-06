@@ -993,6 +993,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // ===================== Data =====================
   const $ = (id) => document.getElementById(id);
   const DATA = JSON.parse($("content").textContent);
+  // A RULES-jelölők (nyitó: perjel-csillag-RULES-kacsacsőr) közötti részek a játék szabályai: a szerver is
+  // ugyanezt a kódot futtatja (scripts/prepare.mjs kimásolja őket a src/rules.gen.js-be). Itt nem lehet DOM, hang vagy hálózat.
+  /*RULES>*/
   const CHAPTERS = DATA.chapters, UNITS = DATA.units, LESSONS = DATA.lessons;
   const UNIT = Object.fromEntries(UNITS.map((u) => [u.id, u]));
   const UNIT_POS = Object.fromEntries(UNITS.map((u, i) => [u.id, i]));
@@ -1003,6 +1006,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const chapterOf = (l) => UNIT[l.unit].chapter;
   const lessonsOfChapter = (cid) => LESSONS.filter((l) => chapterOf(l) === cid);
   const unitsOfChapter = (cid) => UNITS.filter((u) => u.chapter === cid);
+  /*<RULES*/
 
   // ===================== Jogi adatok =====================
   // Az impresszumhoz és az adatkezelési tájékoztatóhoz. Élesítés előtt töltsd ki!
@@ -1019,6 +1023,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   };
 
   // ===================== Tunables =====================
+  /*RULES>*/
   const STORE_KEY = "kodkigyo-progress-v1";
   const PREF_KEY = "kodkigyo-prefs-v1";
   const INFINITE_HEARTS = false; // true: a szívek nem fogynak el (csak teszteléshez)
@@ -1133,6 +1138,46 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     { id: "league", name: "Bajnok", icon: "trophy", c: "var(--gem)", tiers: [1, 3, 5, 10], val: () => state.stats.top3, desc: (t) => `Végezz ${t}-szor a liga dobogóján` },
   ];
 
+  // ===================== Szabályok: segédfüggvények =====================
+  function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const int = (v, max) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? Math.min(n, max || 1e9) : 0; };
+  const str = (v, max) => (typeof v === "string" ? v.slice(0, max || 64) : "");
+  function shuffle(a, rnd) {
+    const r = a.slice(), R = rnd || Math.random;
+    for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+    return r;
+  }
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  // Csak ismert, birtokolt kiegészítők, helyenként (fej, arc, nyak) legfeljebb egy.
+  function cleanAccs(list, owned) {
+    const out = [], slots = new Set();
+    for (const id of list) {
+      const a = ACCS.find((x) => x.id === id);
+      if (a && owned.includes(id) && !slots.has(a.slot)) { out.push(id); slots.add(a.slot); }
+    }
+    return out;
+  }
+
+  // ===================== Dates =====================
+  // A napok magyar idő szerint váltanak, az app és a szerver is így számol (a napkulcs: "ÉÉÉÉ-HH-NN").
+  const DAY = 86400000;
+  const BP_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
+  function dayKey(d) { return BP_DAY.format(d); }
+  const utcOf = (k) => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  // Megjelenítéshez (hónap neve, hét napja) a nap delelője helyi időben, így bármely időzónában ugyanaz a nap.
+  function parseDay(k) { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d, 12); }
+  function addDays(k, n) { return new Date(utcOf(k) + n * DAY).toISOString().slice(0, 10); }
+  function daysBetween(a, b) { return Math.round((utcOf(b) - utcOf(a)) / DAY); }
+  function dow(k) { return new Date(utcOf(k)).getUTCDay(); } // 0 = vasárnap
+  let todayAt = 0, todayVal = "";
+  function today() { const n = Date.now(); if (n - todayAt > 1000 || !todayVal) { todayAt = n; todayVal = dayKey(new Date(n)); } return todayVal; }
+  function yesterday() { return addDays(today(), -1); }
+  function weekKey(k) { k = k || today(); return addDays(k, -((dow(k) + 6) % 7)); }
+  function weekEndMs(wk) { return utcOf(addDays(wk, 7)); }
+  function monthKey() { return today().slice(0, 7); }
+  /*<RULES*/
+
   // ===================== Small utilities =====================
   const NS = "http://www.w3.org/2000/svg";
   function el(tag, attrs, ...kids) {
@@ -1185,15 +1230,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     t.style.setProperty("--snake", c[0]); t.style.setProperty("--snake-dark", c[1]); t.style.setProperty("--snake-belly", c[2]);
     return { t, c };
   }
-  // Csak ismert, birtokolt kiegészítők, helyenként (fej, arc, nyak) legfeljebb egy.
-  function cleanAccs(list, owned) {
-    const out = [], slots = new Set();
-    for (const id of list) {
-      const a = ACCS.find((x) => x.id === id);
-      if (a && owned.includes(id) && !slots.has(a.slot)) { out.push(id); slots.add(a.slot); }
-    }
-    return out;
-  }
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
   function md(s) { return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"); }
   const KW = new Set("if elif else and or not True False None in is pass for while break continue def return".split(" "));
@@ -1217,12 +1253,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("div", { class: "out-label" }, label || "Kimenet", inp ? el("span", { class: "chip" }, inp) : null),
       el("pre", null, text));
   }
-  function shuffle(a, rnd) {
-    const r = a.slice(), R = rnd || Math.random;
-    for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
-    return r;
-  }
-  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
   function fold(s) { return String(s).normalize("NFD").replace(/[̀-ͯ]/g, ""); }
   function cleanAns(s) { return String(s).trim().replace(/\s+/g, " "); }
   function optLabel(o) { return typeof o === "object" ? o.err : o; }
@@ -1231,25 +1261,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return "--uc:var(--u" + n + ");--ucd:var(--u" + n + "d)";
   }
   function chapterStyle(cid) { return unitStyle(unitsOfChapter(cid)[0].id); }
-  function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
-  function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-  const int = (v, max) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? Math.min(n, max || 1e9) : 0; };
-  const str = (v, max) => (typeof v === "string" ? v.slice(0, max || 64) : "");
   function plural(n, word) { return n + " " + word; }
   function fmtNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
-
-  // ===================== Dates =====================
-  const DAY = 86400000;
-  function dayKey(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
-  function parseDay(k) { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); }
-  function addDays(k, n) { const d = parseDay(k); d.setDate(d.getDate() + n); return dayKey(d); }
-  function daysBetween(a, b) { return Math.round((parseDay(b) - parseDay(a)) / DAY); }
-  function today() { return dayKey(new Date()); }
-  function yesterday() { return addDays(today(), -1); }
-  function weekStartDate(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
-  function weekKey(d) { return dayKey(weekStartDate(d || new Date())); }
-  function weekEndMs(wk) { return parseDay(addDays(wk, 7)).getTime(); }
-  function monthKey(d) { d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
   function fmtLeft(ms) {
     const m = Math.max(1, Math.ceil(ms / 60000)), h = Math.floor(m / 60), d = Math.floor(h / 24);
     if (d >= 1) return d + " nap " + (h % 24) + " óra";
@@ -1261,6 +1274,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function fmtJoined(k) { if (!k) return ""; const d = parseDay(k); return d.getFullYear() + ". " + MONTHS[d.getMonth()]; }
 
   // ===================== State =====================
+  /*RULES>*/
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   function newCode() { let s = ""; for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return s; }
   function freshStats() { return { lessons: 0, perfect: 0, correct: 0, maxCombo: 0, quests: 0, practice: 0, fixed: 0, timedBest: 0, top3: 0, chests: 0 }; }
@@ -1269,12 +1283,15 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       v: 2, xp: 0, streak: 0, bestStreak: 0, lastDay: null, best: {}, done: {}, legend: {}, chests: {}, daily: {}, frozen: [],
       freezes: 0, gems: START_GEMS, hearts: HEART_MAX, heartTs: 0, boostUntil: 0, lostStreak: null, quests: null, monthly: null,
       badges: [], ach: {}, mistakes: {}, stats: freshStats(), goal: 30, joined: today(), code: newCode(), follows: [],
-      league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], notices: [], updatedAt: 0, epoch: 0,
-      paused: null, // megszakított lecke: innen folytatható (lásd pauseSession)
+      league: 0, weekKey: null, weekXp: 0, prevWeek: null, seenResult: null, skin: "classic", skins: ["classic"], updatedAt: 0, epoch: 0,
+      notices: [], // a szabályok értesítései (befagyasztó, liga…); a következő művelet válaszával egyszer kerülnek az apphoz
       owner: "", // a fiók azonosítója, amelyhez ez a mentés tartozik ("" = fiók nélkül, offline gyűjtött haladás)
       accs: [], acc: [], // megvett és felvett kiegészítők
       codeThemes: ["base"], codeTheme: "base",
       shields: 0, // hétvégi pajzs
+      run: null,  // a futó lecke (a szerver ehhez méri, hogy a befejezés életszerű-e)
+      held: null, // a szívek elfogyása vagy kilépés miatt félbehagyott lecke, innen folytatható
+      lastRun: null, // az utoljára befejezett lecke eredménye (ha a válasz elveszett, újraküldéskor ezt adjuk vissza)
     };
   }
   function normalize(o) {
@@ -1286,7 +1303,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     for (const k of ["best", "done", "legend", "chests", "daily", "ach", "mistakes"]) if (o[k] && typeof o[k] === "object" && !Array.isArray(o[k])) s[k] = { ...o[k] };
     for (const k of ["frozen", "badges", "follows", "skins", "notices", "accs", "acc", "codeThemes"]) if (Array.isArray(o[k])) s[k] = o[k].slice();
     if (o.stats && typeof o.stats === "object") s.stats = { ...freshStats(), ...o.stats };
-    for (const k of ["quests", "monthly", "lostStreak", "prevWeek", "paused"]) if (o[k] && typeof o[k] === "object") s[k] = JSON.parse(JSON.stringify(o[k]));
+    for (const k of ["quests", "monthly", "lostStreak", "prevWeek", "run", "held", "lastRun"]) if (o[k] && typeof o[k] === "object") s[k] = JSON.parse(JSON.stringify(o[k]));
     if (!o.v) {
       // v1 mentés: csak XP, széria, csillagok és teljesítések voltak benne.
       s.stats.lessons = Object.values(s.done).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -1308,7 +1325,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return s;
   }
   let state = fresh();
-  let prefs = { sound: true, theme: "system", view: "learn", chapter: null, nick: "" };
+  /*<RULES*/
+  let prefs ={ sound: true, theme: "system", view: "learn", chapter: null, nick: "" };
   let S = null; // a futó lecke
 
   function loadLocal() {
@@ -1321,42 +1339,86 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function saveLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) {} }
-  // quiet: automatikus könyvelés (heti/napi váltás, értesítés elolvasása). Ez minden eszközön
-  // ugyanúgy lefut, ezért nem számít a játékos lépésének: nem frissíti az updatedAt-et, és nem tölti fel.
-  function save(quiet) {
-    const days = Object.keys(state.daily).sort();
-    while (days.length > 400) delete state.daily[days.shift()];
-    if (state.frozen.length > 400) state.frozen = state.frozen.slice(-400);
-    const mk = Object.entries(state.mistakes).sort((a, b) => a[1] - b[1]);
-    while (mk.length > 60) delete state.mistakes[mk.shift()[0]];
-    if (quiet) { saveLocal(); return; }
-    state.updatedAt = Date.now();
+  // Saját szerveren (kodkigyo.hu) a szerver a döntő: ez csak a gyors induláshoz tárolt másolat. Fájlként
+  // megnyitva ez maga a mentés, a claude.ai-on pedig innen megy fel a közös tárhelyre is.
+  function save() {
     saveLocal();
-    pushRemote();
-    schedulePublish();
+    if (NET.mode === "claude") { pushRemote(); schedulePublish(); }
   }
-  // Két mentés közül melyik maradjon (pl. új eszközön belépéskor). A haladás törlése új korszakot
+  // Két mentés közül melyik maradjon (a claude.ai-os módban, új eszközön). A haladás törlése új korszakot
   // (epoch) kezd, az mindig nyer; különben a több XP, egyenlő XP-nél a később módosított.
-  function remoteWins(remote, local) {
+  function remoteWins(remote, mine) {
     if (!remote) return false;
-    const re = remote.epoch || 0, le = local.epoch || 0;
+    const re = remote.epoch || 0, le = mine.epoch || 0;
     if (re !== le) return re > le;
-    if (remote.xp !== local.xp) return remote.xp > local.xp;
-    return remote.updatedAt > local.updatedAt;
+    if (remote.xp !== mine.xp) return remote.xp > mine.xp;
+    return remote.updatedAt > mine.updatedAt;
   }
   function adoptState(remote) {
-    // Ugyanannak a fióknak egy régebbi (tulajdonos nélküli) mentése: a tulajdonos marad.
-    if (!remote.owner) remote.owner = state.owner;
+    // Másik fiók állapota jött: az eszközön tárolt értesítései és félbehagyott leckéje nem ehhez tartozik.
+    if ((remote.owner || "") !== local.owner) { local = { owner: remote.owner || "", notices: [], paused: null }; saveExtras(); }
     state = remote;
     saveLocal();
     applySkin();
-    ensureQuests();
-    syncHearts();
-    settleStreak();
-    rollWeek(leagueMode());
   }
 
+  // Ami csak ezen az eszközön van: a még meg nem mutatott értesítések (befagyasztó, liga…) és a félbehagyott
+  // lecke feladatsora (hogy ugyanazokkal a feladatokkal folytatódjon). A szerver a lecke állását tárolja (state.held).
+  const LOCAL_KEY = "kodkigyo-local-v1";
+  let local = { owner: "", notices: [], paused: null };
+  function loadExtras() {
+    try {
+      const o = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
+      if (o && typeof o === "object") local = { owner: str(o.owner, 12), notices: Array.isArray(o.notices) ? o.notices.slice(-20) : [], paused: o.paused && typeof o.paused === "object" ? o.paused : null };
+    } catch (e) {}
+  }
+  function saveExtras() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(local)); } catch (e) {} }
+  function queueNotices(list) { if (list && list.length) { local.notices.push(...list); saveExtras(); } }
+
+  // ===================== Műveletek =====================
+  // Minden haladás- és vagyonváltozás egy műveleten megy át (lásd runAction a szabályoknál). Saját szerveren
+  // a szerver futtatja, és az ő eredménye számít; fájlként vagy a claude.ai-on itt helyben fut ugyanaz a kód.
+  function serverBacked() { return NET.mode === "server"; }
+  async function act(type, payload) {
+    if (serverBacked()) {
+      if (!NET.token) throw new Error("Ehhez be kell jelentkezned.");
+      let r;
+      try { r = await api("POST", "act", { ...(payload || {}), type }); }
+      catch (e) { if (e.status === 401) { forgetAccount(); render(); } throw e; }
+      takeState(r);
+      return r.result || {};
+    }
+    const before = JSON.stringify(state);
+    try {
+      const out = runAction(type, payload || {}, { dev: devMode(), strict: false });
+      queueNotices(out.notices);
+      save();
+      applySkin();
+      return out.result;
+    } catch (e) {
+      state = normalize(JSON.parse(before)); // a hibás művelet semmit nem változtat
+      throw e;
+    }
+  }
+  function takeState(r) {
+    if (r && r.state) adoptState(normalize(r.state));
+    if (r) queueNotices(r.notices);
+  }
+  // A szerver állapotának frissítése (indulás, napváltás, visszatérés a lapra), helyben a napi könyvelés.
+  async function refreshState() {
+    if (serverBacked()) {
+      if (!NET.token) return false;
+      try { takeState(await api("GET", "state")); NET.pulledAt = Date.now(); return true; }
+      catch (e) { if (e.status === 401) { forgetAccount(); render(); } return false; }
+    }
+    try { await act("tick"); } catch (e) {}
+    return true;
+  }
+  // Hibaüzenet egy sikertelen műveletnél: a szabályok üzenete, vagy hogy nincs kapcsolat.
+  function actError(e) { sfx("miss"); toast(e && e.message ? e.message : "Hiba történt. Próbáld újra!"); }
+
   // ===================== Progress helpers =====================
+  /*RULES>*/
   function isDone(i) { return (state.done[LESSONS[i].id] || 0) > 0; }
   function isUnlocked(i) { return i === 0 || isDone(i - 1) || isDone(i); }
   function currentIndex() { for (let i = 0; i < LESSONS.length; i++) if (!isDone(i)) return i; return -1; }
@@ -1389,7 +1451,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function spend(n) { if (state.gems < n) return false; state.gems -= n; return true; }
   function addGems(n) { state.gems += n; }
   function addXp(n) {
-    rollWeek(leagueMode());
+    rollWeek();
     const gain = boostActive() ? n * 2 : n;
     state.xp += gain;
     state.daily[today()] = todayXp() + gain;
@@ -1406,7 +1468,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const gap = [];
     for (let k = 1; k <= missed; k++) gap.push(addDays(state.lastDay, k));
     // A hétvégi pajzs egy hétvége (szombat, vasárnap) kihagyott napjait védi meg, a többi napot a befagyasztók.
-    const weekendOf = (k) => { const d = parseDay(k).getDay(); return d === 6 ? k : d === 0 ? addDays(k, -1) : null; };
+    const weekendOf = (k) => { const d = dow(k); return d === 6 ? k : d === 0 ? addDays(k, -1) : null; };
     const firstWeekend = state.shields > 0 ? gap.map(weekendOf).find(Boolean) : null;
     const shielded = firstWeekend ? gap.filter((k) => weekendOf(k) === firstWeekend).length : 0;
     const rest = missed - shielded;
@@ -1421,7 +1483,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       state.notices.push({ type: "lost", n: state.streak });
       state.streak = 0;
     }
-    save(true);
   }
   function repairAvailable() { return !!(state.lostStreak && daysBetween(state.lostStreak.day, today()) <= 2); }
   function repairStreak() {
@@ -1515,7 +1576,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     q.claimed = true;
     const r = rollChest(questChest(q));
     grantChest(r);
-    save();
     return r;
   }
   function questsClaimable() { ensureQuests(); return state.quests.list.filter((q) => q.prog >= q.goal && !q.claimed).length; }
@@ -1532,6 +1592,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     });
     return news;
   }
+  /*<RULES*/
 
   // ===================== Leagues =====================
   // Offline gépi ellenfelek: a heti XP-jük az idővel determinisztikusan nő, így bármikor újraszámolható.
@@ -1545,7 +1606,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     });
   }
   function botXp(b, wk, at) {
-    const start = parseDay(wk).getTime();
+    const start = utcOf(wk);
     const el = Math.min(7, Math.max(0, (at - start) / DAY));
     let xp = 0;
     for (let d = 0; d < Math.ceil(el); d++) {
@@ -1587,36 +1648,388 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     rows.sort((a, b) => b.xp - a.xp || (a.isMe ? -1 : b.isMe ? 1 : 0));
     return rows;
   }
+  /*RULES>*/
   // Ugyanez a szabály van a szerveren is (src/worker.js), a kettőnek egyeznie kell.
   function zones(size, league) {
     const up = league < LEAGUES.length - 1 ? (size >= 15 ? 5 : Math.min(3, Math.max(1, size - 1))) : 0;
     const down = league > 0 && size >= 8 ? (size >= 15 ? 5 : 3) : 0;
     return { up, down };
   }
-  function rollWeek(mode) {
+  // A szabályok innen kérdeznek az apptól (a szerveren üres). localLeague(hét, liga): fiók nélkül az app maga zárja
+  // le a hetet a gépi (vagy claude.ai-os) ellenfelek alapján, és { rank, size, mode }-ot ad; null: nem ő dönt.
+  const HOOKS = { localLeague: null };
+  function rollWeek() {
     const cur = weekKey();
     if (state.weekKey === cur) return;
     if (state.weekKey) {
       const old = state.weekKey, lg = state.league;
-      // Fiókkal a szerver zárja le a hetet (serverLeagueSync hozza az eredményt), akkor is, ha épp nincs kapcsolat.
-      const serverDecides = mode === "server" || (!!NET.token && NET.mode !== "claude");
-      if (state.weekXp > 0 && !serverDecides) {
-        const rows = board(old, lg, weekEndMs(old));
-        const rank = rows.findIndex((r) => r.isMe) + 1;
-        const z = zones(rows.length, lg);
-        const res = rank <= z.up ? "up" : z.down && rank > rows.length - z.down ? "down" : "stay";
+      // Fiókkal a szerver zárja le a ligát, az eredményt az applyLeagueResult hozza.
+      const own = state.weekXp > 0 && HOOKS.localLeague ? HOOKS.localLeague(old, lg) : null;
+      if (own) {
+        const { rank, size } = own, z = zones(size, lg);
+        const res = rank <= z.up ? "up" : z.down && rank > size - z.down ? "down" : "stay";
         const reward = LEAGUE_REWARDS[rank - 1] || 0;
         if (rank <= 3) state.stats.top3++;
         addGems(reward);
         state.league = Math.min(LEAGUES.length - 1, Math.max(0, lg + (res === "up" ? 1 : res === "down" ? -1 : 0)));
-        state.notices.push({ type: "league", rank, res, from: lg, to: state.league, reward, mode });
+        state.notices.push({ type: "league", rank, res, from: lg, to: state.league, reward, mode: own.mode });
       }
       state.prevWeek = { key: old, xp: state.weekXp, league: lg };
     }
     state.weekKey = cur;
     state.weekXp = 0;
-    save(true);
   }
+  // A szerver ligazárásának eredménye (players.last_result) és a szerver szerinti liga.
+  function applyLeagueResult(r, tier) {
+    if (tier != null) state.league = Math.min(LEAGUES.length - 1, Math.max(0, int(tier, 9)));
+    if (r && r.week && state.seenResult !== r.week) {
+      state.seenResult = r.week;
+      if (r.reward) addGems(int(r.reward, 100));
+      if (r.rank <= 3) state.stats.top3++;
+      state.notices.push({ type: "league", rank: r.rank, res: r.res, from: r.from, to: r.to, reward: r.reward, mode: "online" });
+    }
+  }
+
+  // ===================== Műveletek =====================
+  // Minden, ami a haladást vagy a vagyont változtatja, egy műveleten (runAction) megy át. A saját szerveren
+  // (kodkigyo.hu) a szerver futtatja őket, és az ő eredménye számít; fájlként megnyitva vagy a claude.ai-on az app.
+  // A szerver nem az app által számolt mentést veszi át, hanem azt, hogy mit csinált a játékos (melyik leckét
+  // kezdte el, mit válaszolt, mit vett meg), és a jutalmat, az árat, a ládák sorsolását maga számolja ki.
+  class RuleError extends Error {}
+  const fail = (msg) => { throw new RuleError(msg); };
+  // A leckefajták szabályai (a felület a MODES-ban teszi hozzá a feliratokat).
+  const RUN_MODES = {
+    lesson: { hearts: true, requeue: true }, exam: { hearts: true, requeue: true },
+    practice: { requeue: true }, mistakes: { requeue: true }, timed: { timed: 60000 },
+    legendary: { allowed: 2, requeue: true }, jump: { allowed: 3, requeue: true },
+  };
+  // Életszerű tempó: átlagosan ennél gyorsabban senki nem válaszol, és egy lecke legalább ennyi ideig tart.
+  // A tempót csak a szerver ellenőrzi (STRICT); helyben, fájlként megnyitva csak a saját gépén csalhatna bárki.
+  const MIN_ANSWER_MS = { timed: 700, other: 1200 };
+  const MIN_RUN_MS = 8000;
+  let STRICT = true;
+  const MAX_ANSWERS = 400;
+  const BASE_XP = { lesson: 10, exam: 25, practice: 10, mistakes: 10, legendary: 20, jump: 15 };
+  const BASE_GEMS = { lesson: 2, exam: 10, legendary: 5, jump: 5, practice: 1, mistakes: 1 };
+  const lessonOfKey = (key) => LESSONS[LESSON_POS[String(key).split(":")[0]]];
+  const exCount = (ls) => ls.reduce((n, l) => n + l.ex.length, 0);
+  const runId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  function poolFromDone() {
+    const ls = LESSONS.filter((l, i) => !l.exam && isDone(i));
+    return ls.length ? ls : LESSONS.filter((l) => !l.exam).slice(0, 2);
+  }
+  // Melyik leckék feladatai jöhetnek a futó leckében, és hány feladatból áll (ugyanígy rakja össze az app).
+  function runScope(run) {
+    const L = run.i != null ? LESSONS[run.i] : null;
+    if (run.mode === "lesson" || run.mode === "legendary") return [L];
+    if (run.mode === "exam") return (L.scope === "all" ? LESSONS : lessonsOfChapter(L.scope)).filter((l) => !l.exam);
+    if (run.mode === "jump") return LESSONS.filter((l) => !l.exam && CH_POS[chapterOf(l)] < CH_POS[run.chapter]);
+    if (run.mode === "mistakes") return LESSONS;
+    return poolFromDone();
+  }
+  function runTotal(run) {
+    const L = run.i != null ? LESSONS[run.i] : null, ls = runScope(run);
+    if (run.mode === "lesson" || run.mode === "legendary") return L.ex.length;
+    if (run.mode === "exam") return Math.min(L.count, exCount(ls));
+    if (run.mode === "jump") return Math.min(12, exCount(ls));
+    if (run.mode === "practice") return Math.min(10, exCount(ls));
+    if (run.mode === "mistakes") return Math.min(10, Object.keys(state.mistakes).filter((k) => EX_BY_KEY[k]).length);
+    return 0;
+  }
+  function curRun(p) {
+    const run = state.run;
+    if (!run || run.id !== p.run) fail("Ez a lecke már lezárult. Kezdd újra!");
+    return run;
+  }
+  // A válaszok hatása: szív, statisztika, küldetések, elrontott feladatok. a = { k: feladat, ok: jó-e, f: elsőre jó-e }.
+  function applyAnswers(run, list) {
+    list = Array.isArray(list) ? list : [];
+    if (!list.length) return;
+    if (run.n + list.length > MAX_ANSWERS) fail("Túl sok válasz.");
+    const scope = new Set(runScope(run).map((l) => l.id)), M = RUN_MODES[run.mode];
+    // Előbb mindent ellenőrzünk (a feladatokat, majd a tempót), és csak utána változtatunk.
+    for (const a of list) {
+      const key = str(a && a.k, 40), L = EX_BY_KEY[key] ? lessonOfKey(key) : null;
+      if (!L || !scope.has(L.id)) fail("Ismeretlen feladat.");
+    }
+    const pace = run.mode === "timed" ? MIN_ANSWER_MS.timed : MIN_ANSWER_MS.other;
+    if (STRICT && Date.now() - run.at < (run.n + list.length) * pace) fail("Ez túl gyors volt. Próbáld újra!");
+    for (const a of list) {
+      const key = a.k;
+      run.n++;
+      if (a.ok) {
+        run.ok++;
+        run.combo++;
+        run.maxCombo = Math.max(run.maxCombo, run.combo);
+        if (a.f) run.first++;
+        state.stats.correct++;
+        state.stats.maxCombo = Math.max(state.stats.maxCombo, run.combo);
+        questEvent("correct", 1);
+        questEvent("combo", run.combo, true);
+        if ((run.mode === "practice" || run.mode === "mistakes") && state.mistakes[key]) { delete state.mistakes[key]; state.stats.fixed++; }
+      } else {
+        run.wrong++;
+        run.combo = 0;
+        state.mistakes[key] = Date.now();
+        if (M.hearts) loseHeart();
+      }
+    }
+  }
+  // Felvétel: ugyanarról a helyről (fej, arc, nyak) a régit leveszi.
+  function wearAcc(id) {
+    const a = ACCS.find((x) => x.id === id);
+    state.acc = cleanAccs([id, ...state.acc.filter((x) => ACCS.find((y) => y.id === x).slot !== a.slot)], state.accs);
+  }
+  // Tesztláda: a fejlődés kikényszeríthető ("always" / "never"), egyébként a szokásos esélyek.
+  function rollDevChest(base, luck) {
+    const path = [base];
+    let t = base;
+    for (let k = 1; k < CHEST_TAPS; k++) {
+      const up = luck === "always" || (luck !== "never" && Math.random() < CHEST_UP[t]);
+      if (up && t < CHEST_TIERS.length - 1) t++;
+      path.push(t);
+    }
+    const T = CHEST_TIERS[t];
+    return { path, tier: t, gems: T.gems[0] + Math.floor(Math.random() * (T.gems[1] - T.gems[0] + 1)), boost: !!T.boost };
+  }
+  const ACT = {
+    tick() { return {}; },
+    // Lecke indítása. A szerver megjegyzi, mikor kezdődött, és mennyi feladatból áll.
+    start(p) {
+      const mode = str(p.mode, 12), M = RUN_MODES[mode];
+      if (!M) fail("Ismeretlen gyakorlás.");
+      const lessonMode = mode === "lesson" || mode === "exam" || mode === "legendary";
+      const i = lessonMode ? Number(p.i) : null, L = lessonMode ? LESSONS[i] : null;
+      if (lessonMode && (!Number.isInteger(i) || !L)) fail("Ismeretlen lecke.");
+      if ((mode === "lesson" && L.exam) || (mode === "exam" && !L.exam)) fail("Ismeretlen lecke.");
+      if (lessonMode && !isUnlocked(i)) fail("Ez a lecke még zárva van.");
+      if (mode === "legendary") {
+        if (L.exam || !isDone(i)) fail("Az Aranykígyó-szinthez előbb teljesítsd a leckét.");
+        if (state.legend[L.id]) fail("Ez az állomás már aranyba fordult.");
+      }
+      let chapter = null;
+      if (mode === "jump") {
+        chapter = str(p.chapter, 40);
+        if (!(chapter in CH_POS) || CH_POS[chapter] === 0) fail("Ismeretlen fejezet.");
+      }
+      if (M.hearts && heartsNow() <= 0) fail("Elfogytak a szíveid. Gyakorolj egyet, vagy tölts fel szíveket a boltban!");
+      // Folytatás: a félbehagyott lecke ugyanonnan megy tovább.
+      if (p.resume && state.held && state.held.mode === mode && state.held.i === i) {
+        state.run = { ...state.held, id: runId() };
+        state.held = null;
+        return { run: state.run.id, resumed: true, hearts: heartsNow(), total: state.run.total };
+      }
+      if (lessonMode && state.held && state.held.i === i) state.held = null; // elölről kezdi
+      ensureQuests();
+      const run = { id: runId(), mode, i, chapter, at: Date.now(), n: 0, ok: 0, first: 0, wrong: 0, combo: 0, maxCombo: 0,
+        q0: state.quests.list.map((q) => q.prog), xp0: state.xp };
+      run.total = runTotal(run);
+      if (mode !== "timed" && !run.total) fail("Ehhez még nincs elég feladat.");
+      if (mode === "legendary" && !spend(PRICE.legendary)) fail("Ehhez " + PRICE.legendary + " drágakő kell.");
+      state.run = run;
+      return { run: run.id, hearts: heartsNow(), total: run.total };
+    },
+    // Válaszok a lecke közben: elfogyott szívnél (end: "pause", folytatható) vagy kilépéskor (end: "quit").
+    answers(p) {
+      const run = curRun(p);
+      applyAnswers(run, p.answers);
+      if (p.end === "pause" && (run.mode === "lesson" || run.mode === "exam")) { state.held = run; state.run = null; }
+      else if (p.end) state.run = null;
+      return { hearts: heartsNow() };
+    },
+    // A lecke vége: a jutalmat a szerver számolja (XP, drágakő, széria, küldetések, eredmények).
+    finish(p) {
+      if (state.lastRun && p.run && state.lastRun.id === p.run) return state.lastRun.result; // a válasz elveszett, újraküldte
+      const run = curRun(p);
+      applyAnswers(run, p.answers);
+      const mode = run.mode, M = RUN_MODES[mode], timed = !!M.timed, L = run.i != null ? LESSONS[run.i] : null;
+      const elapsed = Date.now() - run.at;
+      if (timed) { if (STRICT && elapsed < M.timed - 5000) fail("A Villámkör még nem járt le."); }
+      else {
+        if (run.ok < run.total) fail("A lecke még nincs kész.");
+        if (M.allowed != null && run.wrong > M.allowed) fail("Túl sok hiba volt, ez most nem sikerült.");
+      }
+      if (STRICT && elapsed < MIN_RUN_MS) fail("Ez túl gyors volt. Próbáld újra!");
+      const acc = timed ? (run.n ? run.ok / run.n : 0) : Math.min(1, run.first / run.total);
+      const stars = acc >= 0.9 ? 3 : acc >= 0.7 ? 2 : 1;
+      const perfect = !timed && run.first >= run.total;
+      let base = BASE_XP[mode] || 0;
+      if (timed) base = Math.min(run.ok, 60);
+      if (perfect && (mode === "lesson" || mode === "exam")) base += 5;
+      const beforeToday = todayXp(), boosted = boostActive();
+      const gained = base ? addXp(base) : 0;
+      const streak = extendStreak();
+      let gems = BASE_GEMS[mode] || 0;
+      if (timed) gems = Math.min(5, Math.floor(run.ok / 4));
+      if (perfect) gems += 2;
+      addGems(gems);
+      const firstTime = !!L && !isDone(run.i);
+      if (mode === "lesson" || mode === "exam" || mode === "legendary") {
+        state.done[L.id] = (state.done[L.id] || 0) + 1;
+        state.best[L.id] = Math.max(state.best[L.id] || 0, stars);
+        state.stats.lessons++;
+        questEvent("lessons", 1);
+        if (perfect) { state.stats.perfect++; questEvent("perfect", 1); }
+        if (acc >= 0.9) questEvent("acc90", 1);
+      }
+      if (mode === "legendary") state.legend[L.id] = true;
+      if (mode === "practice" || mode === "mistakes" || timed) { state.stats.practice++; questEvent("practice", 1); }
+      const heart = mode === "practice" && !INFINITE_HEARTS;
+      if (heart) gainHearts(1);
+      if ((mode === "lesson" || mode === "exam") && state.held && state.held.i === run.i) state.held = null;
+      // Gyakorlás után, ha újra van szív, felajánljuk a félbehagyott lecke folytatását.
+      if (mode === "practice" && state.held && heartsNow() > 0) state.notices.push({ type: "resume" });
+      if (timed) state.stats.timedBest = Math.max(state.stats.timedBest, run.ok);
+      let unlock = null;
+      if (mode === "jump") {
+        LESSONS.forEach((l, i) => { if (CH_POS[chapterOf(l)] < CH_POS[run.chapter] && !isDone(i)) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 1; } });
+        unlock = LESSON_POS[lessonsOfChapter(run.chapter)[0].id];
+      } else if (firstTime && (mode === "lesson" || mode === "exam") && run.i + 1 < LESSONS.length) unlock = run.i + 1;
+      const ach = checkAch().map((x) => ({ id: x.a.id, tier: x.tier }));
+      ensureQuests();
+      state.run = null;
+      const result = { mode, gained, boosted, gems, acc, stars, perfect, firstTime, unlock, streak, ach, heart, q0: run.q0, xp0: run.xp0,
+        beforeToday, correct: run.ok, timedBest: state.stats.timedBest, chapter: run.chapter };
+      state.lastRun = { id: run.id, result };
+      return result;
+    },
+    claimQuest(p) {
+      ensureQuests();
+      const r = claimQuest(int(p.i, 9));
+      if (!r) fail("Ezt a küldetést még nem teljesítetted, vagy a ládáját már kinyitottad.");
+      return { chest: r };
+    },
+    unitChest(p) {
+      const uid = str(p.uid, 40);
+      if (!UNIT[uid]) fail("Ismeretlen egység.");
+      if (state.chests[uid]) fail("Ezt a ládát már kinyitottad.");
+      if (!unitDone(uid)) fail("Fejezd be az egység leckéit, és kinyílik a láda.");
+      state.chests[uid] = true;
+      const r = rollChest(1);
+      grantChest(r);
+      return { chest: r };
+    },
+    buy(p) {
+      const kind = str(p.kind, 12), id = str(p.id, 20);
+      const pay = (price) => { if (!spend(price)) fail("Nincs elég drágaköved. Teljesíts leckéket és küldetéseket!"); };
+      if (kind === "freeze") { if (state.freezes >= FREEZE_MAX) fail("Már " + FREEZE_MAX + " befagyasztód van."); pay(PRICE.freeze); state.freezes++; }
+      else if (kind === "shield") { if (state.shields >= SHIELD_MAX) fail("Már van hétvégi pajzsod."); pay(PRICE.shield); state.shields++; }
+      else if (kind === "refill") { if (INFINITE_HEARTS || heartsNow() >= HEART_MAX) fail("Tele vannak a szíveid."); pay(PRICE.refill); state.hearts = HEART_MAX; }
+      else if (kind === "boost") { if (boostActive()) fail("A dupla XP már be van kapcsolva."); pay(PRICE.boost); state.boostUntil = Date.now() + BOOST_MS; }
+      else if (kind === "repair") { if (!repairAvailable()) fail("Nincs visszaállítható széria."); pay(PRICE.repair); repairStreak(); }
+      else if (kind === "skin") {
+        const sk = SKINS.find((s) => s.id === id);
+        if (!sk || !sk.price) fail("Ismeretlen kígyó.");
+        if (state.skins.includes(id)) fail("Ez a kígyó már a tiéd.");
+        pay(sk.price); state.skins.push(id); state.skin = id;
+      } else if (kind === "acc") {
+        const a = ACCS.find((x) => x.id === id);
+        if (!a) fail("Ismeretlen kiegészítő.");
+        if (state.accs.includes(id)) fail("Ez a kiegészítő már a tiéd.");
+        pay(a.price); state.accs.push(id); wearAcc(id);
+      } else if (kind === "theme") {
+        const t = CODE_THEMES.find((x) => x.id === id);
+        if (!t || !t.price) fail("Ismeretlen kódtéma.");
+        if (state.codeThemes.includes(id)) fail("Ez a kódtéma már a tiéd.");
+        pay(t.price); state.codeThemes.push(id); state.codeTheme = id;
+      } else fail("Ismeretlen termék.");
+      return {};
+    },
+    wear(p) {
+      if (p.skin != null) { const id = str(p.skin, 20); if (!state.skins.includes(id)) fail("Ez a kígyó még nem a tiéd."); state.skin = id; }
+      if (p.acc != null) {
+        const id = str(p.acc, 20);
+        if (!state.accs.includes(id)) fail("Ez a kiegészítő még nem a tiéd.");
+        if (p.on === false) state.acc = state.acc.filter((x) => x !== id); else wearAcc(id);
+      }
+      if (p.codeTheme != null) { const id = str(p.codeTheme, 20); if (!state.codeThemes.includes(id)) fail("Ez a kódtéma még nem a tiéd."); state.codeTheme = id; }
+      return {};
+    },
+    goal(p) {
+      const xp = int(p.xp, 1000);
+      if (!GOALS.some((g) => g.xp === xp)) fail("Ismeretlen napi cél.");
+      state.goal = xp;
+      return {};
+    },
+    // Haladás törlése: új korszak kezdődik (minden eszköz ezt tölti be). A barátkód és a követések maradnak.
+    reset() {
+      const keep = { code: state.code, follows: state.follows, owner: state.owner, seenResult: state.seenResult };
+      state = Object.assign(fresh(), keep, { epoch: Date.now() });
+      return {};
+    },
+    // Tesztpanel: csak az üzemeltetőnek (a szerveren ADMIN_IDS), illetve helyben.
+    dev(p) {
+      const op = str(p.op, 20), n = Number(p.n) || 0;
+      if (op === "gems") state.gems = Math.max(0, state.gems + Math.round(n));
+      else if (op === "gemsZero") state.gems = 0;
+      else if (op === "heartsFull") state.hearts = HEART_MAX;
+      else if (op === "heartsEmpty") { state.hearts = 0; state.heartTs = Date.now(); }
+      else if (op === "chest") { const r = rollDevChest(int(p.tier, CHEST_TIERS.length - 1), str(p.luck, 8)); grantChest(r); return { chest: r }; }
+      else if (op === "questsDone" || op === "questsReset") { ensureQuests(); state.quests.list.forEach((q) => { q.prog = op === "questsDone" ? q.goal : 0; q.claimed = false; }); }
+      else if (op === "streak") {
+        const k = int(n, 400);
+        for (let i = 0; i < k; i++) { const d = addDays(today(), -i); state.daily[d] = Math.max(state.daily[d] || 0, 10); }
+        state.streak = k; state.lastDay = today(); state.bestStreak = Math.max(state.bestStreak, k); state.lostStreak = null;
+      }
+      else if (op === "freeze") state.freezes = Math.min(FREEZE_MAX, state.freezes + 1);
+      else if (op === "shield") state.shields = SHIELD_MAX;
+      else if (op === "boost") state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS;
+      else if (op === "unlockAll") LESSONS.forEach((l) => { if (!state.done[l.id]) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 3; } });
+      else if (op === "allSkins") SKINS.forEach((s) => { if (!state.skins.includes(s.id)) state.skins.push(s.id); });
+      else if (op === "allAccs") ACCS.forEach((a) => { if (!state.accs.includes(a.id)) state.accs.push(a.id); });
+      else if (op === "allThemes") CODE_THEMES.forEach((t) => { if (!state.codeThemes.includes(t.id)) state.codeThemes.push(t.id); });
+      else if (op === "xp") addXp(int(n, 5000));
+      else fail("Ismeretlen tesztművelet.");
+      return {};
+    },
+  };
+  // Napváltás és minden művelet előtt: küldetések, szívek, széria, hét, liga, eredmények.
+  // ctx (a szerveren): { tier: liga, last: a legutóbbi ligazárás eredménye, follows: kiket követ, dev: tesztpanel engedélyezve }.
+  function dayTick(ctx) {
+    if (ctx && Array.isArray(ctx.follows)) state.follows = ctx.follows.slice(0, 300);
+    ensureQuests();
+    syncHearts();
+    settleStreak();
+    rollWeek();
+    if (ctx && (ctx.tier != null || ctx.last)) applyLeagueResult(ctx.last, ctx.tier);
+    const news = checkAch();
+    if (news.length) state.notices.push({ type: "ach", list: news.map((x) => ({ id: x.a.id, tier: x.tier })) });
+  }
+  function trimState() {
+    const days = Object.keys(state.daily).sort();
+    while (days.length > 400) delete state.daily[days.shift()];
+    if (state.frozen.length > 400) state.frozen = state.frozen.slice(-400);
+    const mk = Object.entries(state.mistakes).sort((a, b) => a[1] - b[1]);
+    while (mk.length > 60) delete state.mistakes[mk.shift()[0]];
+  }
+  // Egy művelet: { result, notices }. Hibánál RuleError, és ilyenkor a hívó nem menti el az állapotot.
+  // ctx.strict === false: a tempót nem ellenőrizzük (helyben, és a szerver helyi tesztjeinél).
+  function runAction(type, p, ctx) {
+    STRICT = !(ctx && ctx.strict === false);
+    const fn = Object.prototype.hasOwnProperty.call(ACT, type) ? ACT[type] : null;
+    if (!fn) fail("Ismeretlen művelet.");
+    if (type === "dev" && !(ctx && ctx.dev)) fail("Ehhez nincs jogosultságod.");
+    dayTick(ctx);
+    const result = fn(p && typeof p === "object" ? p : {}) || {};
+    if (type !== "tick") state.updatedAt = Date.now(); // a puszta frissítés ne írjon feleslegesen
+    trimState();
+    return { result, notices: state.notices.splice(0) };
+  }
+  // A nyilvános profil adatai (a szerver ezeket írja a players táblába, a többiek ezt látják).
+  function publicStats() {
+    return {
+      xp: state.xp, streak: state.streak, bestStreak: state.bestStreak, lastDay: state.lastDay || null,
+      lessons: LESSONS.filter((_, i) => isDone(i)).length, ach: Object.values(state.ach).reduce((a, b) => a + b, 0),
+      skin: state.skin, acc: state.acc.join(","), weekKey: state.weekKey, weekXp: state.weekXp,
+    };
+  }
+  /*<RULES*/
+  // Fiók nélkül (fájlként) a gépi ellenfelek, a claude.ai-on a többi felhasználó alapján az app zárja le a hetet.
+  HOOKS.localLeague = (old, lg) => {
+    if (NET.mode === "server" || (NET.token && NET.mode !== "claude")) return null;
+    const rows = board(old, lg, weekEndMs(old));
+    return { rank: rows.findIndex((r) => r.isMe) + 1, size: rows.length, mode: leagueMode() };
+  };
 
   // ===================== Sound =====================
   let ac = null, bus = null, verb = null, noiseBuf = null;
@@ -2023,33 +2436,23 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     clearTimeout(NET.pubTimer);
     NET.pubTimer = setTimeout(publishPlayer, 1200);
   }
+  // A claude.ai-os nyilvános profil (saját szerveren a szerver írja a profilt a saját állapotából).
   async function publishPlayer(force) {
-    if (!NET.uid || !NET.canWrite) return;
+    if (NET.mode !== "claude" || !NET.uid || !NET.canWrite || !NET.db) return;
     const doc = publicDoc();
     const json = JSON.stringify(doc);
     if (json === NET.lastPub && force !== true) return;
     if (NET.publishing) { schedulePublish(); return; }
     NET.publishing = true;
     try {
-      if (NET.mode === "server") {
-        const res = await api("PUT", "me", { stats: doc });
-        // Az első heti XP-vel a szerver csoportba sorol: ekkor lekérjük a csoport tagjait.
-        if (res && res.grouped && !(NET.league && NET.league.grouped)) refreshSocial().then(renderSocial, () => {});
-      } else await NET.db.doc("players/" + NET.uid).set(doc);
+      await NET.db.doc("players/" + NET.uid).set(doc);
       NET.lastPub = json;
     } catch (e) {
-      if (NET.mode === "server") { if (e.status === 401) { forgetAccount(); renderSocial(); } }
-      else if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) { NET.canWrite = false; renderSocial(); }
+      if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) { NET.canWrite = false; renderSocial(); }
     }
     NET.publishing = false;
   }
   async function pushRemote() {
-    if (NET.mode === "server") {
-      if (!NET.token || !NET.canWrite) return;
-      clearTimeout(NET.pushTimer);
-      NET.pushTimer = setTimeout(pushServerProgress, 1500);
-      return;
-    }
     if (!NET.progressRef) return;
     if (pushing) { pushAgain = true; return; }
     pushing = true;
@@ -2058,47 +2461,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     pushing = false;
     if (pushAgain) { pushAgain = false; pushRemote(); }
   }
-  async function pushServerProgress() {
-    clearTimeout(NET.pushTimer);
-    NET.pushTimer = 0;
-    if (!NET.token || !NET.canWrite) return;
-    try { await api("PUT", "progress", { data: JSON.parse(JSON.stringify(state)), updatedAt: state.updatedAt }); }
-    catch (e) {
-      if (e.status === 401) { forgetAccount(); renderSocial(); }
-      // A szerveren több haladás van (egy másik eszközről): azt töltjük be, nem írjuk felül.
-      else if (e.status === 409 && e.data && e.data.data) takeServerState(normalize(e.data.data));
-    }
-  }
-  function takeServerState(remote) {
-    if (S) { NET.pendingRemote = remote; return; }
-    adoptState(remote);
-    publishPlayer(true);
-    render();
-    toast("Betöltöttük a haladásodat a másik eszközödről.");
-  }
-  // Ha a fül a háttérbe kerül vagy bezárul, a függő mentést azonnal elküldjük.
-  function flushServer() {
-    if (NET.mode !== "server" || !NET.token || !NET.canWrite || !NET.pushTimer) return;
-    clearTimeout(NET.pushTimer);
-    NET.pushTimer = 0;
-    const body = JSON.stringify({ data: state, updatedAt: state.updatedAt });
-    try {
-      fetch("/api/progress", { method: "PUT", keepalive: body.length < 60000, cache: "no-store",
-        headers: { "content-type": "application/json", authorization: "Bearer " + NET.token }, body });
-    } catch (e) {}
-  }
-  // Ha visszatér a fülre, megnézzük, nem haladt-e közben egy másik eszközön.
+  // Ha visszatér a lapra, frissítjük az állapotot (közben egy másik eszközön is haladhatott).
   async function pullServer() {
-    if (NET.mode !== "server" || !NET.token || S || NET.pushTimer || Date.now() - (NET.pulledAt || 0) < 15000) return;
-    NET.pulledAt = Date.now();
-    try {
-      const pr = await api("GET", "progress");
-      const remote = pr && pr.data ? normalize(pr.data) : null;
-      if (remoteWins(remote, state)) takeServerState(remote);
-    } catch (e) {}
+    if (NET.mode !== "server" || !NET.token || S || Date.now() - (NET.pulledAt || 0) < 15000) return;
+    if (await refreshState()) { render(); showNotices(); }
   }
-  document.addEventListener("visibilitychange", () => { if (document.hidden) flushServer(); else pullServer(); });
-  window.addEventListener("pagehide", flushServer);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) pullServer(); });
 
   // ---------- claude.ai artifact mód ----------
   async function connectRemote() {
@@ -2162,34 +2530,20 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     } catch (e) { return false; }
     NET.mode = "server";
     try { NET.token = localStorage.getItem(ACCOUNT_KEY); } catch (e) {}
-    if (NET.token) await loadAccount();
+    // Belépett játékosnál a szerver állapota nélkül nem indulunk (ha 401 jött, a fiók már nincs: üdvözlő képernyő).
+    if (NET.token) { const ok = await loadAccount(); return ok || !NET.token; }
     return true;
   }
+  // Belépés után a fiók állapota a szerverről jön (az eszközön tárolt másolat sosem kerül a szerverre),
+  // így egy másik fiók itt maradt haladása sem keveredhet bele.
   async function loadAccount() {
     try {
-      // Előbb a mentést egyeztetjük, csak utána jönnek a ligaeredmények és a statisztikák.
       const id = NET.token.split(".")[0];
-      const pr = await api("GET", "progress");
-      const remote = pr && pr.data ? normalize(pr.data) : null;
-      let push = true;
-      if (state.owner && state.owner !== id) {
-        // Az itt maradt mentés egy másik fiókhoz tartozik (pl. kijelentkezés után): sosem keverjük bele.
-        // Ennek a fióknak a saját mentése jön, új fióknál pedig tiszta lap.
-        adoptState(remote || fresh());
-        prefs.chapter = null;
-        savePrefs();
-        push = !remote;
-      } else if (remoteWins(remote, state)) {
-        adoptState(remote);
-        push = false;
-      }
-      // Fiók nélkül gyűjtött haladás (owner üres) az első fiókhoz kerül, onnantól ahhoz tartozik.
-      state.owner = id;
-      saveLocal();
-      if (push) await pushServerProgress();
+      if (state.owner !== id) { prefs.chapter = null; savePrefs(); }
+      const r = await api("GET", "state");
+      takeState(r);
       await refreshSocial();
       NET.pulledAt = Date.now();
-      publishPlayer(true);
       startPolling();
       return true;
     } catch (e) {
@@ -2208,26 +2562,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     [s.me, ...s.following, ...s.followers, ...(s.class ? s.class.members : []), ...(s.league ? s.league.members : [])].forEach((p) => m.set(p.id, cleanPlayer(p)));
     NET.players = m;
     NET.followersList = s.followers.map((p) => p.id);
-    state.follows = s.following.map((p) => p.id);
-    state.code = s.me.code;
     NET.ready = true;
-    serverLeagueSync();
-    // Ha a szerver csalás elleni korlátja miatt lemaradt némi XP, a következő szinkron pótolja.
-    if (s.me.xp < state.xp || (state.weekKey === s.week && s.me.weekXp < state.weekXp)) schedulePublishForce();
-  }
-  function schedulePublishForce() { clearTimeout(NET.pubTimer); NET.pubTimer = setTimeout(() => publishPlayer(true), 30000); }
-  // Fiókkal a ligát a szerver zárja le hetente; az eredményt egyszer mutatjuk meg.
-  function serverLeagueSync() {
-    if (NET.mode !== "server" || !NET.me) return;
-    state.league = Math.min(LEAGUES.length - 1, Math.max(0, NET.league ? NET.league.tier : NET.me.league));
-    const r = NET.me.lastResult;
-    if (r && r.week && state.seenResult !== r.week) {
-      state.seenResult = r.week;
-      if (r.reward) addGems(r.reward);
-      if (r.rank <= 3) state.stats.top3++;
-      state.notices.push({ type: "league", rank: r.rank, res: r.res, from: r.from, to: r.to, reward: r.reward, mode: "online" });
-      save();
-    }
+    // A liga eredménye (jutalom, feljutás) a szerver állapotával érkezik; ha épp most zárult, frissítjük.
+    const r = s.me.lastResult;
+    if ((r && r.week && state.seenResult !== r.week) || (NET.league && NET.league.tier !== state.league)) await refreshState();
   }
   // Liga fülre lépve frissítjük az állást (legfeljebb 20 másodpercenként).
   function refreshLeagueSoon() {
@@ -2306,9 +2644,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     NET.token = r.token;
     try { localStorage.setItem(ACCOUNT_KEY, r.token); } catch (e) {}
     NET.canWrite = true;
-    state.seenResult = state.seenResult || null;
     await loadAccount();
-    save();
   }
   async function loginWithCode(input) {
     const raw = String(input || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -2355,14 +2691,22 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   async function follow(uid, code) {
     if (NET.mode === "server") { await api("POST", "follow", code ? { code } : { id: uid }); await refreshSocial(); }
     else if (!state.follows.includes(uid)) state.follows.push(uid);
-    const news = checkAch();
-    save();
-    news.forEach((n) => toast("Új eredmény: " + n.a.name + " " + n.tier + ". szint"));
+    // A „Barátságos” eredményt a szabályok adják meg (saját szerveren a szerver).
+    await refreshState();
+    toastAchNotices();
   }
   async function unfollow(uid) {
     if (NET.mode === "server") { await api("DELETE", "follow/" + uid); await refreshSocial(); }
     else state.follows = state.follows.filter((x) => x !== uid);
-    save();
+    await refreshState();
+  }
+  // Az új eredményekről szóló értesítéseket rögtön felugró üzenetként mutatjuk (nem kell hozzá ablak).
+  function toastAchNotices() {
+    const list = local.notices.filter((n) => n.type === "ach").flatMap((n) => n.list || []);
+    if (!list.length) return;
+    local.notices = local.notices.filter((n) => n.type !== "ach");
+    saveExtras();
+    list.forEach((x) => { const a = ACH.find((y) => y.id === x.id); if (a) toast("Új eredmény: " + a.name + " " + x.tier + ". szint"); });
   }
   // Törlési jog (GDPR 17. cikk). Saját szerveren a teljes fiók törlődik; a claude.ai-on a
   // nyilvános játékprofil és az online mentés, és ebben a munkamenetben nem írunk többet.
@@ -2373,6 +2717,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       forgetAccount();
       // A törölt fiók haladása erről az eszközről is törlődik, és egy új fiókba sem kerül át.
       state = fresh();
+      local = { owner: "", notices: [], paused: null };
+      saveExtras();
       prefs.chapter = null;
       saveLocal();
       savePrefs();
@@ -2525,10 +2871,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return a;
   }
   function weekRow() {
-    const ws = weekStartDate(new Date()), t = today();
+    const ws = weekKey(), t = today();
     return el("div", { class: "week", role: "img", "aria-label": "A hét napjai" }, DAYS_SHORT.map((d, i) => {
-      const x = new Date(ws); x.setDate(x.getDate() + i);
-      const k = dayKey(x), st = dayStatus(k);
+      const k = addDays(ws, i), st = dayStatus(k);
       return el("div", null, el("span", null, d), el("i", { class: (st || "") + (k === t ? " today" : "") }, st === "done" ? icon("flame") : st === "frozen" ? icon("snow") : null));
     }));
   }
@@ -2672,10 +3017,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const bottomLimit = window.innerHeight - (window.innerWidth < 700 ? 80 : 16);
     if (pr.bottom > bottomLimit) window.scrollBy({ top: pr.bottom - bottomLimit, behavior: REDUCED ? "auto" : "smooth" });
   }
+  // Az árat a lecke indításakor vonja le a szerver (startSession → start művelet).
   function startLegendary(i) {
     if (state.gems < PRICE.legendary) { toast("Ehhez " + PRICE.legendary + " drágakő kell."); return; }
-    spend(PRICE.legendary);
-    save();
     startSession({ mode: "legendary", i });
   }
   // ---------- Kincsesláda-nyitás ----------
@@ -2939,13 +3283,14 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       if (queued) { queued = false; tap(); }
     })();
   }
-  function openChest(uid, btn) {
+  async function openChest(uid, btn) {
     if (state.chests[uid]) { toast("Ezt a ládát már kinyitottad."); return; }
     if (!unitDone(uid)) { sfx("tap"); retrigger(btn, "bump"); toast("Fejezd be az egység leckéit, és kinyílik a láda."); return; }
-    state.chests[uid] = true;
-    const r = rollChest(1);
-    grantChest(r);
-    save();
+    if (btn.dataset.busy) return;
+    btn.dataset.busy = "1";
+    let r;
+    try { r = (await act("unitChest", { uid })).chest; }
+    catch (e) { delete btn.dataset.busy; actError(e); return; }
     btn.classList.add("opened");
     btn.replaceChildren(icon("chestOpen"));
     openChestFx(r, () => { renderChips(); renderRail(); });
@@ -3051,7 +3396,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function renderLeague() {
     const mode = leagueMode();
-    rollWeek(mode);
     const lg = state.league, L = LEAGUES[lg];
     const rows = board(state.weekKey, lg);
     const z = zones(rows.length, lg);
@@ -3100,10 +3444,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const chest = el("button", { class: "q-chest" + (ready ? " ready" : q.claimed ? " claimed" : ""), type: "button", style: q.claimed ? null : "color:" + ct.c2,
       "aria-label": ready ? ct.name + ", kinyitom" : q.claimed ? "Átvéve" : "Jutalom: " + ct.name, disabled: !ready && !opts.live },
       icon(q.claimed ? "chestOpen" : "chest"));
-    chest.addEventListener("click", () => {
-      if (!(q.prog >= q.goal && !q.claimed)) return;
-      const r = claimQuest(i);
-      if (!r) return;
+    chest.addEventListener("click", async () => {
+      if (!(q.prog >= q.goal && !q.claimed) || chest.dataset.busy) return;
+      // A láda tartalmát a szerver sorsolja ki; itt csak eljátsszuk.
+      chest.dataset.busy = "1";
+      let r;
+      try { r = (await act("claimQuest", { i })).chest; }
+      catch (e) { delete chest.dataset.busy; actError(e); return; }
       chest.className = "q-chest claimed";
       chest.style.color = "";
       chest.replaceChildren(icon("chestOpen"));
@@ -3147,13 +3494,28 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   function priceBtn(price, label, onClick, disabled, cls) {
     return el("button", { class: "btn sm " + (cls || "gem"), type: "button", disabled: !!disabled, onclick: onClick }, label ? label + " · " : null, el("span", { class: "price" }, icon("gem"), price));
   }
-  function buy(price, fn, msg) {
-    if (state.gems < price) { sfx("miss"); toast("Nincs elég drágaköved. Teljesíts leckéket és küldetéseket!"); return; }
-    spend(price);
-    fn();
-    save();
-    sfx("coin");
-    toast(msg);
+  // Vásárlás és felvétel: az árat és azt, hogy mi a tiéd, a szerver ellenőrzi (helyben ugyanazok a szabályok).
+  let buying = false;
+  function priceOf(kind, id) {
+    const list = { skin: SKINS, acc: ACCS, theme: CODE_THEMES }[kind];
+    if (list) { const x = list.find((y) => y.id === id); return x ? x.price : 0; }
+    return PRICE[kind] || 0;
+  }
+  async function buy(kind, id, msg, sound) {
+    if (buying) return;
+    if (state.gems < priceOf(kind, id)) { sfx("miss"); toast("Nincs elég drágaköved. Teljesíts leckéket és küldetéseket!"); return; }
+    buying = true;
+    try { await act("buy", { kind, id }); sfx(sound || "coin"); toast(msg); }
+    catch (e) { actError(e); }
+    buying = false;
+    render();
+  }
+  async function wear(p) {
+    if (buying) return;
+    buying = true;
+    try { await act("wear", p); sfx("boop"); }
+    catch (e) { actError(e); }
+    buying = false;
     render();
   }
   function renderShop() {
@@ -3166,49 +3528,44 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const streakSec = el("section", { class: "shop-sec" }, el("h2", null, "Széria"),
       shopItem(icon("snow"), "var(--ice)", "var(--ice-soft)", "Széria-befagyasztó",
         "Ha kihagysz egy napot, megvédi a szériádat. Egyszerre " + FREEZE_MAX + " lehet felszerelve.",
-        state.freezes >= FREEZE_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.freeze, null, () => buy(PRICE.freeze, () => { state.freezes++; sfx("freeze"); }, "Széria-befagyasztó felszerelve!")),
+        state.freezes >= FREEZE_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.freeze, null, () => buy("freeze", null, "Széria-befagyasztó felszerelve!", "freeze")),
         freezeEq),
       shopItem(icon("shield"), "var(--blue)", "var(--blue-soft)", "Hétvégi pajzs",
         "Ha egy hétvégén (szombaton, vasárnap vagy mindkét nap) kimarad a tanulás, megvédi a szériádat, és a befagyasztóid megmaradnak hétköznapra.",
-        state.shields >= SHIELD_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.shield, null, () => buy(PRICE.shield, () => { state.shields++; sfx("freeze"); }, "Hétvégi pajzs felszerelve!"))));
+        state.shields >= SHIELD_MAX ? el("span", { class: "pill" }, "Felszerelve") : priceBtn(PRICE.shield, null, () => buy("shield", null, "Hétvégi pajzs felszerelve!", "freeze"))));
     if (repairAvailable()) {
       const L = state.lostStreak;
       streakSec.append(shopItem(icon("wrench"), "var(--flame)", "var(--flame-soft)", "Széria-javítás",
         "Visszaállítja az elveszett " + L.n + " napos szériádat. Csak a széria elvesztése után 2 napig vásárolható.",
-        priceBtn(PRICE.repair, null, () => buy(PRICE.repair, repairStreak, "Visszakaptad a szériádat!"))));
+        priceBtn(PRICE.repair, null, () => buy("repair", null, "Visszakaptad a szériádat!"))));
     }
     root.append(streakSec,
       el("section", { class: "shop-sec" }, el("h2", null, "Szívek"),
         shopItem(icon("heart"), "var(--heart)", "var(--heart-soft)", "Szívfeltöltés",
           INFINITE_HEARTS ? "Teszt módban végtelen szíved van, most nincs szükséged rá." : "Feltölti mind az " + HEART_MAX + " szívedet. Most " + h + "/" + HEART_MAX + " szíved van.",
-          priceBtn(PRICE.refill, null, () => buy(PRICE.refill, () => { state.hearts = HEART_MAX; }, "Feltöltötted a szíveidet!"), INFINITE_HEARTS || h >= HEART_MAX))),
+          priceBtn(PRICE.refill, null, () => buy("refill", null, "Feltöltötted a szíveidet!"), INFINITE_HEARTS || h >= HEART_MAX))),
       el("section", { class: "shop-sec" }, el("h2", null, "Erősítők"),
         shopItem(icon("bolt"), "var(--sun-deep)", "var(--sun-soft)", "Dupla XP · 15 perc",
           boostActive() ? "Aktív, még " + fmtClock(state.boostUntil - Date.now()) + " percig minden XP duplán számít." : "15 percig minden lecke és gyakorlás kétszeres XP-t ér.",
-          boostActive() ? el("span", { class: "pill" }, "Aktív") : priceBtn(PRICE.boost, null, () => buy(PRICE.boost, () => { state.boostUntil = Date.now() + BOOST_MS; }, "Dupla XP bekapcsolva 15 percre!")))));
+          boostActive() ? el("span", { class: "pill" }, "Aktív") : priceBtn(PRICE.boost, null, () => buy("boost", null, "Dupla XP bekapcsolva 15 percre!")))));
     const skins = el("section", { class: "shop-sec" }, el("h2", null, "Tekla kinézete"));
     SKINS.forEach((sk) => {
       const art = tekla("still");
       if (sk.c) { art.style.setProperty("--snake", sk.c[0]); art.style.setProperty("--snake-dark", sk.c[1]); art.style.setProperty("--snake-belly", sk.c[2]); }
       const owned = state.skins.includes(sk.id), using = state.skin === sk.id;
-      const act = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
-        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => { state.skin = sk.id; applySkin(); save(); sfx("boop"); render(); } }, "Felveszem")
-        : priceBtn(sk.price, null, () => buy(sk.price, () => { state.skins.push(sk.id); state.skin = sk.id; applySkin(); }, sk.name + " a tiéd!"), false, "gem");
+      const btn = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
+        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => wear({ skin: sk.id }) }, "Felveszem")
+        : priceBtn(sk.price, null, () => buy("skin", sk.id, sk.name + " a tiéd!"), false, "gem");
       const sw = sk.theme ? [sk.theme.light[0], sk.theme.light[2], `hsl(${sk.theme.h} 18% 93%)`] : ["#129C6B", "#D3F2E4", "#E9F0EB"];
       skins.append(shopItem(art, "var(--brand)", "var(--surface-2)", sk.name,
         (sk.c ? "Tekla és vele az egész felület " + sk.tone + " színekbe öltözik." : "Az eredeti, zöld Tekla és zöld felület.") +
-          (!owned && state.gems < sk.price ? " Még " + fmtNum(sk.price - state.gems) + " drágakő kell hozzá." : ""), act,
+          (!owned && state.gems < sk.price ? " Még " + fmtNum(sk.price - state.gems) + " drágakő kell hozzá." : ""), btn,
         el("span", { class: "swatches", "aria-hidden": "true" }, sw.map((c) => el("i", { style: "background:" + c })))));
     });
     root.append(skins, accShopSec(), codeShopSec());
     return root;
   }
   const missing = (price) => (state.gems < price ? " Még " + fmtNum(price - state.gems) + " drágakő kell hozzá." : "");
-  // Felvétel: ugyanarról a helyről (fej, arc, nyak) a régit leveszi.
-  function wearAcc(id) {
-    const a = ACCS.find((x) => x.id === id);
-    state.acc = cleanAccs([id, ...state.acc.filter((x) => ACCS.find((y) => y.id === x).slot !== a.slot)], state.accs);
-  }
   function accShopSec() {
     const sec = el("section", { class: "shop-sec" }, el("h2", null, "Kiegészítők"),
       el("p", { class: "shop-note" }, "Bármelyik kígyóhoz felveheted őket, fejre, arcra és nyakra egyet-egyet. A többiek is látják a ligában és a barátlistán."));
@@ -3216,11 +3573,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const owned = state.accs.includes(a.id), worn = state.acc.includes(a.id);
       // Az előnézetben a mostani kiegészítőid mellett ez is rajta van.
       const art = tekla("still", cleanAccs([a.id, ...state.acc], ACCS.map((x) => x.id)));
-      const change = (fn, sound) => () => { fn(); save(); sfx(sound); render(); };
-      const act = worn ? el("button", { class: "btn ghost sm", type: "button", onclick: change(() => { state.acc = state.acc.filter((x) => x !== a.id); }, "boop") }, "Leveszem")
-        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: change(() => wearAcc(a.id), "boop") }, "Felveszem")
-        : priceBtn(a.price, null, () => buy(a.price, () => { state.accs.push(a.id); wearAcc(a.id); }, a.name + " a tiéd!"), false, "gem");
-      sec.append(shopItem(art, "var(--brand)", "var(--surface-2)", a.name, a.text + (owned ? "" : missing(a.price)), act,
+      const btn = worn ? el("button", { class: "btn ghost sm", type: "button", onclick: () => wear({ acc: a.id, on: false }) }, "Leveszem")
+        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => wear({ acc: a.id }) }, "Felveszem")
+        : priceBtn(a.price, null, () => buy("acc", a.id, a.name + " a tiéd!"), false, "gem");
+      sec.append(shopItem(art, "var(--brand)", "var(--surface-2)", a.name, a.text + (owned ? "" : missing(a.price)), btn,
         worn ? el("span", { class: "pill", style: "margin-top:6px" }, icon("check"), "Rajtad van") : null));
     }
     return sec;
@@ -3231,10 +3587,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     for (const t of CODE_THEMES) {
       const v = t.vars || CODE_BASE, owned = state.codeThemes.includes(t.id), using = state.codeTheme === t.id;
       const preview = el("pre", { class: "code code-mini", style: codeVars(v), "aria-hidden": "true" }, el("code", { html: hl('for i in range(3):\n    print("Szia!")  # köszön') }));
-      const act = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
-        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => { state.codeTheme = t.id; applyCodeTheme(); save(); sfx("boop"); render(); } }, "Ezt kérem")
-        : priceBtn(t.price, null, () => buy(t.price, () => { state.codeThemes.push(t.id); state.codeTheme = t.id; applyCodeTheme(); }, t.name + " kódtéma bekapcsolva!"), false, "gem");
-      sec.append(shopItem(icon("brace"), v.kw, v.bg, t.name, t.text + (owned ? "" : missing(t.price)), act, preview));
+      const btn = using ? el("span", { class: "pill" }, icon("check"), "Használatban")
+        : owned ? el("button", { class: "btn ghost sm", type: "button", onclick: () => wear({ codeTheme: t.id }) }, "Ezt kérem")
+        : priceBtn(t.price, null, () => buy("theme", t.id, t.name + " kódtéma bekapcsolva!"), false, "gem");
+      sec.append(shopItem(icon("brace"), v.kw, v.bg, t.name, t.text + (owned ? "" : missing(t.price)), btn, preview));
     }
     return sec;
   }
@@ -3422,11 +3778,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("div", { class: "code-box" }, el("code", { style: "font:600 16px/1.4 var(--f-mono);overflow-wrap:anywhere" }, code)),
       el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"),
-        el("button", { class: "btn bad", type: "button", onclick: (e) => busy(e.currentTarget, null, async () => {
-          // A még el nem küldött haladás előbb felmegy a fiókba.
-          await pushServerProgress();
+        el("button", { class: "btn bad", type: "button", onclick: () => {
+          // A haladás a szerveren van, kijelentkezéskor nincs mit feltölteni.
           forgetAccount(); closeSheet(); render(); toast("Kijelentkeztél ezen az eszközön.");
-        }) }, "Kijelentkezés")));
+        } }, "Kijelentkezés")));
   }
 
   // ---------- Kötelező fiók: üdvözlő képernyő ----------
@@ -3580,7 +3935,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       sec("adatvedelem", "Adatkezelési tájékoztató",
         p("Adatkezelő: ", val(LEGAL.operator, "üzemeltető neve"), ". Kapcsolat: ", contact(), "."),
         el("h3", null, "A saját eszközödön tárolt adatok"),
-        p("A haladásod (XP, széria, leckeeredmények, drágakövek, küldetések, eredmények, az elrontott feladatok listája) egy példányát és a beállításaidat (hang, téma, napi cél) a saját böngésződ is tárolja, hogy a Kódkígyó gyorsan és kapcsolat nélkül is működjön. Ha a szerver épp nem érhető el, vagy a Kódkígyót fájlként nyitod meg, fiók nélkül, offline módban is tanulhatsz: ilyenkor az adataid csak a böngésződben vannak, és nem jutnak el hozzánk."),
+        p("A kodkigyo.hu-n a haladásodat (XP, széria, leckeeredmények, drágakövek, vásárlások, küldetések, eredmények, az elrontott feladatok listája) a szerver számolja és menti, ezért a használatához internet kell. A böngésződ ennek egy másolatát és a beállításaidat (hang, téma, megnyitott fül) is tárolja, hogy a Kódkígyó gyorsan induljon, valamint a még meg nem mutatott értesítéseket és egy félbehagyott lecke feladatsorát. Ha a Kódkígyót fájlként nyitod meg, fiók nélkül is tanulhatsz: ilyenkor az adataid csak a böngésződben vannak, és nem jutnak el hozzánk."),
         p("A Kódkígyó nem használ analitikát, hirdetést vagy követőkódot. A betűtípusokat és a hangokat maga az oldal tartalmazza, így külső szolgáltatótól csak a fiók létrehozásakor használt robotszűrőt tölti be (lásd lent)."),
         p("A weboldalt a tárhelyszolgáltató (", val(LEGAL.host, "tárhelyszolgáltató neve"), ") szolgálja ki. A kérések kiszolgálásához és a támadások kiszűréséhez kezeli az IP-címedet és a böngésződ technikai adatait, a saját ", ext("https://www.cloudflare.com/privacypolicy/", "adatvédelmi szabályzata"), " szerint."),
         el("h3", null, "A fiókod"),
@@ -3603,16 +3958,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("h3", null, "Cél és jogalap"),
         p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont). A regisztrációs korlát és a robotszűrés célja a szolgáltatás és a felhasználók védelme a visszaélésekkel szemben. Ennek jogalapja a jogos érdekünk (GDPR 6. cikk (1) bekezdés f) pont)."),
         el("h3", null, "A jogaid"),
-        p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A helyben tárolt adatokat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
+        p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A haladásodat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
         p("Panasszal a Nemzeti Adatvédelmi és Információszabadság Hatósághoz fordulhatsz (1055 Budapest, Falk Miksa utca 9–11., ", ext("https://naih.hu", "naih.hu"), "), illetve bírósághoz."),
         el("h3", null, "Gyerekek"),
         p("A Kódkígyót diákoknak készítettük, ezért a lehető legkevesebb adatot kérjük: a fiókhoz elég egy becenév. Kérjük, ne a teljes neved add meg, és semmi olyat, amiből kideríthető, ki vagy. A claude.ai-os online módhoz claude.ai-fiók kell, amelynek korhatárára az Anthropic feltételei vonatkoznak.")),
       sec("sutik", "Sütik és helyi tárolás",
-        p("A Kódkígyó nem használ sütiket (cookie-kat). A böngésző helyi tárolójában (localStorage) legfeljebb három bejegyzést hoz létre, mert enélkül nem tudná megjegyezni a haladásodat:"),
+        p("A Kódkígyó nem használ sütiket (cookie-kat). A böngésző helyi tárolójában (localStorage) legfeljebb négy bejegyzést hoz létre, mert enélkül nem tudna működni:"),
         el("div", { class: "table-wrap" }, el("table", null,
           el("thead", null, el("tr", null, el("th", null, "Név"), el("th", null, "Mit tárol"), el("th", null, "Meddig"))),
           el("tbody", null,
-            el("tr", null, el("td", null, el("code", null, STORE_KEY)), el("td", null, "a haladásodat és a jutalmaidat"), el("td", null, "amíg nem törlöd")),
+            el("tr", null, el("td", null, el("code", null, STORE_KEY)), el("td", null, "a haladásod másolatát (a kodkigyo.hu-n a szerveré a mérvadó)"), el("td", null, "amíg nem törlöd")),
+            el("tr", null, el("td", null, el("code", null, LOCAL_KEY)), el("td", null, "a még meg nem mutatott értesítéseket és egy félbehagyott lecke feladatsorát"), el("td", null, "amíg meg nem jelennek, illetve a lecke végéig")),
             el("tr", null, el("td", null, el("code", null, PREF_KEY)), el("td", null, "a beállításaidat: hang, téma, megnyitott fül, becenév"), el("td", null, "amíg nem törlöd")),
             el("tr", null, el("td", null, el("code", null, ACCOUNT_KEY)), el("td", null, "a fiókod belépőkulcsát, csak ha létrehoztál fiókot"), el("td", null, "amíg ki nem jelentkezel, vagy nem törlöd a fiókot"))))),
         p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével."),
@@ -3621,7 +3977,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",
           "A tananyagot gondosan állítottuk össze, és minden kódpéldát lefuttattunk Pythonnal, de hiba így is előfordulhat. Ha találsz egyet, jelezd itt: " + (LEGAL.email || "[e-mail cím]") + ".",
-          "Fiókkal a közös online ligában valódi játékosokkal versenyzel. Fiók nélkül, vagy ha nincs kapcsolat a szerverrel, a ligában a többi versenyző kitalált nevű gépi ellenfél, nem valódi ember.",
+          "A kodkigyo.hu-n a haladásodat és a jutalmaidat a szerver számolja és menti, ezért a használatához internet kell. A közös online ligában valódi játékosokkal versenyzel. Ha a Kódkígyót fájlként nyitod meg, a ligában kitalált nevű gépi ellenfelek vannak, nem valódi emberek.",
+          "Tilos a játék szabályait megkerülni, például a mentést vagy a kéréseket átírni, programmal leckéket teljesíteni. Az ilyen fiók haladását az üzemeltető nullázhatja, vagy a fiókot törölheti.",
           "A ligacsoportod tagjai, a barátaid és az osztálytársaid láthatják a becenevedet és a játékstatisztikáidat. A becenév nem lehet sértő vagy megtévesztő, és ne használd a Kódkígyót mások zaklatására. A szabályokat sértő fiókot az üzemeltető törölheti, az osztály létrehozója pedig eltávolíthat tagot az osztályból.",
           "A belépőkódodra te vigyázol. Aki ismeri, be tud lépni a fiókodba, ezért senkinek ne add meg.",
           "Az alkalmazást jelenlegi állapotában biztosítjuk. A jogszabályok által megengedett mértékben nem vállalunk felelősséget a használatából eredő károkért.",
@@ -3706,7 +4063,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const grid = el("div", { class: "cal-grid" }, DAYS_SHORT.map((d) => el("span", null, d)));
     for (let i = 0; i < lead; i++) grid.append(el("i", { "aria-hidden": "true" }));
     for (let d = 1; d <= days; d++) {
-      const k = dayKey(new Date(y, m, d)), st = dayStatus(k);
+      const k = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0"), st = dayStatus(k);
       grid.append(el("i", { class: (st || "") + (k === t ? " today" : ""), title: k + (st === "done" ? ": gyakoroltál" : st === "frozen" ? ": befagyasztó védte" : "") }, d));
     }
     const box = el("div", { class: "cal" });
@@ -3740,7 +4097,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       kids.push(el("p", { class: "meta", style: "text-align:center" }, h >= HEART_MAX ? "Tele vagy, mehet a tanulás!" : "Következő szív " + fmtLeft(nextHeartMs()) + " múlva. Gyakorlással is szerezhetsz szívet."));
       kids.push(el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: () => startSession({ mode: "practice" }) }, "Gyakorlás +1 szív"),
-        priceBtn(PRICE.refill, "Feltöltés", () => { if (state.gems < PRICE.refill) { toast("Nincs elég drágaköved."); return; } spend(PRICE.refill); state.hearts = HEART_MAX; save(); sfx("coin"); closeSheet(); render(); toast("Feltöltötted a szíveidet!"); }, h >= HEART_MAX)));
+        priceBtn(PRICE.refill, "Feltöltés", async () => {
+          try { await act("buy", { kind: "refill" }); } catch (e) { actError(e); return; }
+          sfx("coin"); closeSheet(); render(); toast("Feltöltötted a szíveidet!");
+        }, h >= HEART_MAX)));
     }
     if (!fromLesson) kids.push(el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Rendben"));
     openSheet(null, ...kids);
@@ -3853,7 +4213,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     openSheet(null, el("h3", { id: "sheetTitle" }, "Beállítások"),
       row("Hangok", "Hangeffektek a leckékben", sw(prefs.sound, "Hangok", () => { prefs.sound = !prefs.sound; savePrefs(); if (prefs.sound) sfx("tap"); settingsSheet(); })),
       el("div", null, el("b", null, "Téma"), seg([{ v: "system", label: "Rendszer" }, { v: "light", label: "Világos" }, { v: "dark", label: "Sötét" }], prefs.theme, (v) => { prefs.theme = v; savePrefs(); applyTheme(); settingsSheet(); render(); })),
-      el("div", null, el("b", null, "Napi cél"), seg(GOALS.map((g) => ({ v: g.xp, label: g.name, sub: g.xp + " XP" })), state.goal, (v) => { state.goal = v; save(); settingsSheet(); render(); })),
+      el("div", null, el("b", null, "Napi cél"), seg(GOALS.map((g) => ({ v: g.xp, label: g.name, sub: g.xp + " XP" })), state.goal, async (v) => {
+        try { await act("goal", { xp: v }); } catch (e) { actError(e); }
+        settingsSheet(); render();
+      })),
       nickBlock,
       server ? row("Belépőkód", "Ezzel léphetsz be másik eszközön.", el("button", { class: "btn ghost sm", type: "button", onclick: showLoginCode }, "Mutasd")) : null,
       server ? row("Kijelentkezés", "Ezen az eszközön. A haladásod itt marad.", el("button", { class: "btn ghost sm", type: "button", onclick: confirmLogout }, "Kijelentkezés")) : null,
@@ -3884,7 +4247,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     openSheet(null, tekla("sad"), el("h3", { id: "sheetTitle" }, "Biztosan törlöd?"), el("p", { class: "meta" }, "A teljes haladásod elvész, és nem lehet visszaállítani."),
       el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"),
-        el("button", { class: "btn bad", type: "button", onclick: () => { const code = state.code, follows = state.follows; state = fresh(); state.code = code; state.follows = follows; state.epoch = Date.now(); prefs.chapter = null; save(); savePrefs(); applySkin(); closeSheet(); go("learn"); toast("A haladásod törölve."); } }, "Törlés")));
+        el("button", { class: "btn bad", type: "button", onclick: async () => {
+          try { await act("reset"); } catch (e) { actError(e); return; }
+          local.paused = null; saveExtras();
+          prefs.chapter = null; savePrefs(); closeSheet(); go("learn"); toast("A haladásod törölve.");
+        } }, "Törlés")));
     sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
   }
 
@@ -3896,33 +4263,26 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     return NET.mode === "server" && !!(NET.me && NET.me.admin);
   }
   let devLuck = "random"; // a tesztládák fejlődése: "random", "always" vagy "never"
-  function devChest(base) {
-    const path = [base];
-    let t = base;
-    for (let k = 1; k < CHEST_TAPS; k++) {
-      const up = devLuck === "always" || (devLuck === "random" && Math.random() < CHEST_UP[t]);
-      if (up && t < CHEST_TIERS.length - 1) t++;
-      path.push(t);
-    }
-    const T = CHEST_TIERS[t];
-    const r = { path, tier: t, gems: T.gems[0] + Math.floor(Math.random() * (T.gems[1] - T.gems[0] + 1)), boost: !!T.boost };
-    grantChest(r);
-    save();
-    closeSheet();
-    openChestFx(r, () => { render(); devPanel(); });
+  // A tesztpanel műveleteit is a szerver végzi (csak az üzemeltető fiókjának engedi).
+  async function devOp(op, extra, msg) {
+    let r;
+    try { r = await act("dev", { op, ...(extra || {}) }); } catch (e) { actError(e); return null; }
+    render();
+    sfx("coin");
+    if (msg) toast(msg);
+    return r;
   }
-  function devStreak(n) {
-    for (let i = 0; i < n; i++) { const k = addDays(today(), -i); state.daily[k] = Math.max(state.daily[k] || 0, 10); }
-    state.streak = n;
-    state.lastDay = today();
-    state.bestStreak = Math.max(state.bestStreak, n);
-    state.lostStreak = null;
+  async function devChest(base) {
+    const r = await devOp("chest", { tier: base, luck: devLuck });
+    if (!r || !r.chest) return;
+    closeSheet();
+    openChestFx(r.chest, () => { render(); devPanel(); });
   }
   function devPanel() {
     // Újrarajzoláskor a panel ott marad, ahol a gombot megnyomta.
-    const keep = (fn) => () => { const y = sheet.scrollTop; fn(); devPanel(); sheet.scrollTop = y; };
-    const act = (label, fn, msg) => el("button", { class: "btn ghost sm", type: "button", onclick: keep(() => { fn(); save(); render(); sfx("coin"); if (msg) toast(msg); }) }, label);
-    const notice = (label, n) => el("button", { class: "btn ghost sm", type: "button", onclick: () => { closeSheet(); state.notices.push(n); showNotices(); } }, label);
+    const keep = (fn) => async () => { const y = sheet.scrollTop; await fn(); devPanel(); sheet.scrollTop = y; };
+    const act = (label, op, extra, msg) => el("button", { class: "btn ghost sm", type: "button", onclick: keep(() => devOp(op, extra, msg)) }, label);
+    const notice = (label, n) => el("button", { class: "btn ghost sm", type: "button", onclick: () => { closeSheet(); local.notices.push(n); showNotices(); } }, label);
     const sec = (title, now, ...kids) => el("div", { class: "dev-sec" }, el("b", null, title, now != null ? el("small", null, now) : null), ...kids);
     const row = (...btns) => el("div", { class: "dev-row" }, ...btns);
     const lg = state.league;
@@ -3932,25 +4292,25 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("p", { class: "meta" }, "Kipróbálhatod vele a játék részeit. A saját mentésedet módosítja, a ligában versenyző heti XP-hez nem nyúl."),
       modOn() ? sec("Moderálás", NET.me.reported ? NET.me.reported + " jelentett vagy gyanús játékos" : "nincs teendő",
         row(el("button", { class: "btn ghost sm", type: "button", onclick: () => modPanel() }, icon("shield"), "Jelentések és keresés"))) : null,
-      sec("Drágakövek", "most " + state.gems, row(act("+50", () => addGems(50)), act("+500", () => addGems(500)), act("Nullázás", () => { state.gems = 0; }))),
-      sec("Szívek", "most " + heartsNow() + "/" + HEART_MAX, row(act("Feltöltés", () => { state.hearts = HEART_MAX; }), act("Elfogyasztás", () => { state.hearts = 0; state.heartTs = Date.now(); }))),
+      sec("Drágakövek", "most " + state.gems, row(act("+50", "gems", { n: 50 }), act("+500", "gems", { n: 500 }), act("Nullázás", "gemsZero"))),
+      sec("Szívek", "most " + heartsNow() + "/" + HEART_MAX, row(act("Feltöltés", "heartsFull"), act("Elfogyasztás", "heartsEmpty"))),
       sec("Láda kinyitása", "a jutalmat meg is kapod",
         row(...CHEST_TIERS.map((t, i) => el("button", { class: "btn ghost sm dev-chest", type: "button", style: "--dc:" + t.c2, onclick: () => devChest(i) }, icon("chest"), t.short))),
         el("div", { class: "seg" }, [["random", "Véletlen fejlődés"], ["always", "Mindig fejlődik"], ["never", "Nem fejlődik"]].map(([v, label]) =>
           el("button", { type: "button", "aria-pressed": String(devLuck === v), onclick: keep(() => { devLuck = v; }) }, label)))),
       sec("Napi küldetések", null, row(
-        act("Mind kész", () => { ensureQuests(); state.quests.list.forEach((q) => { q.prog = q.goal; q.claimed = false; }); }, "Kész! A ládákat a Küldetések fülön nyithatod ki."),
-        act("Visszaállítás", () => { ensureQuests(); state.quests.list.forEach((q) => { q.prog = 0; q.claimed = false; }); }))),
+        act("Mind kész", "questsDone", null, "Kész! A ládákat a Küldetések fülön nyithatod ki."),
+        act("Visszaállítás", "questsReset"))),
       sec("Széria", "most " + liveStreak() + " nap · " + state.freezes + "/" + FREEZE_MAX + " befagyasztó", row(
-        act("+1 nap", () => devStreak(liveStreak() + 1)), act("7 nap", () => devStreak(7)), act("30 nap", () => devStreak(30)),
-        act("+1 befagyasztó", () => { state.freezes = Math.min(FREEZE_MAX, state.freezes + 1); }))),
-      sec("Dupla XP", boostActive() ? "aktív" : "nincs", row(act("+15 perc", () => { state.boostUntil = Math.max(Date.now(), state.boostUntil) + BOOST_MS; }))),
-      sec("Tananyag", null, row(act("Minden lecke feloldása", () => { LESSONS.forEach((l) => { if (!state.done[l.id]) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 3; } }); }))),
+        act("+1 nap", "streak", { n: liveStreak() + 1 }), act("7 nap", "streak", { n: 7 }), act("30 nap", "streak", { n: 30 }),
+        act("+1 befagyasztó", "freeze"))),
+      sec("Dupla XP", boostActive() ? "aktív" : "nincs", row(act("+15 perc", "boost"))),
+      sec("Tananyag", null, row(act("Minden lecke feloldása", "unlockAll"))),
       sec("Kígyók, kiegészítők, kódtémák", null, row(
-        act("Minden kígyó", () => { SKINS.forEach((s) => { if (!state.skins.includes(s.id)) state.skins.push(s.id); }); }, "Kész! A Boltban bármelyiket felveheted."),
-        act("Minden kiegészítő", () => { ACCS.forEach((a) => { if (!state.accs.includes(a.id)) state.accs.push(a.id); }); }, "Kész! A Boltban felpróbálhatod őket."),
-        act("Minden kódtéma", () => { CODE_THEMES.forEach((t) => { if (!state.codeThemes.includes(t.id)) state.codeThemes.push(t.id); }); }, "Kész! A Boltban válthatsz közöttük."))),
-      sec("Hétvégi pajzs", state.shields + "/" + SHIELD_MAX, row(act("+1 pajzs", () => { state.shields = SHIELD_MAX; }))),
+        act("Minden kígyó", "allSkins", null, "Kész! A Boltban bármelyiket felveheted."),
+        act("Minden kiegészítő", "allAccs", null, "Kész! A Boltban felpróbálhatod őket."),
+        act("Minden kódtéma", "allThemes", null, "Kész! A Boltban válthatsz közöttük."))),
+      sec("Hétvégi pajzs", state.shields + "/" + SHIELD_MAX, row(act("+1 pajzs", "shield"))),
       sec("Értesítések kipróbálása", "csak megjelenik, nem változtat semmit", row(
         notice("Feljutás", { type: "league", rank: 1, res: "up", from: lg, to: Math.min(LEAGUES.length - 1, lg + 1), reward: LEAGUE_REWARDS[0] }),
         notice("Kiesés", { type: "league", rank: 27, res: "down", from: lg, to: Math.max(0, lg - 1), reward: 0 }),
@@ -4020,9 +4380,14 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
 
   function showNotices() {
-    if (S || gateEl || !sheet.hidden || !state.notices.length) return;
-    const n = state.notices.shift();
-    save(true);
+    if (S || gateEl || offlineEl || !sheet.hidden || !local.notices.length) return;
+    const n = local.notices.shift();
+    saveExtras();
+    if (n.type === "ach") {
+      (n.list || []).forEach((x) => { const a = ACH.find((y) => y.id === x.id); if (a) toast("Új eredmény: " + a.name + " " + x.tier + ". szint"); });
+      showNotices();
+      return;
+    }
     if (n.type === "frozen") {
       sfx("freeze");
       openSheet(null, el("div", { class: "streak-hero" }, icon("flameIce", "flame-big"), el("div", null, el("b", { id: "sheetTitle", style: "color:var(--ice)" }, n.streak + " nap"), el("span", { class: "muted" }, "A szériád biztonságban van."))),
@@ -4035,7 +4400,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => { closeSheet(); go("shop"); } }, "Javítás a boltban"), el("button", { class: "btn", type: "button", onclick: closeSheet }, "Új szériát kezdek")));
       sheetIn.querySelector(".tekla").style.cssText = "width:96px;height:96px";
     } else if (n.type === "resume") {
-      const p = state.paused && pausedFor(state.paused.i);
+      const p = state.held && pausedFor(state.held.i);
       if (!p || heartsNow() <= 0) { showNotices(); return; }
       const L = LESSONS[p.i];
       openSheet(unitStyle(L.unit), tekla("happy"), el("h3", { id: "sheetTitle" }, "Folytatod a leckét?"),
@@ -4061,13 +4426,13 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const foot = $("foot"), footIn = $("footIn"), fb = $("fb"), actBtn = $("actBtn"), altBtn = $("altBtn");
   let footMode = "idle", timerInt = 0;
   const MODES = {
-    lesson: { hearts: true, requeue: true },
-    exam: { hearts: true, requeue: true, label: "Vizsga", icon: "trophy" },
-    practice: { requeue: true, label: "Gyakorlás", icon: "dumbbell" },
-    mistakes: { requeue: true, label: "Hibáim", icon: "redo" },
-    timed: { timed: 60000, label: "Villámkör", icon: "clock" },
-    legendary: { allowed: 2, requeue: true, label: "Aranykígyó", icon: "goldsnake" },
-    jump: { allowed: 3, requeue: true, label: "Szintfelmérő", icon: "flag" },
+    lesson: { ...RUN_MODES.lesson },
+    exam: { ...RUN_MODES.exam, label: "Vizsga", icon: "trophy" },
+    practice: { ...RUN_MODES.practice, label: "Gyakorlás", icon: "dumbbell" },
+    mistakes: { ...RUN_MODES.mistakes, label: "Hibáim", icon: "redo" },
+    timed: { ...RUN_MODES.timed, label: "Villámkör", icon: "clock" },
+    legendary: { ...RUN_MODES.legendary, label: "Aranykígyó", icon: "goldsnake" },
+    jump: { ...RUN_MODES.jump, label: "Szintfelmérő", icon: "flag" },
   };
 
   function examPool(ls, count) {
@@ -4077,38 +4442,62 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     while (picked.length < count && rest.length) picked.push(rest.pop());
     return shuffle(picked);
   }
-  function poolFromDone() {
-    const ls = LESSONS.filter((l, i) => !l.exam && isDone(i));
-    return ls.length ? ls : LESSONS.filter((l) => !l.exam).slice(0, 2);
-  }
   function snapshotQuests() { ensureQuests(); return state.quests.list.map((q) => q.prog); }
 
   // ---------- Megszakított lecke ----------
-  // Ha egy leckében elfogynak a szívek, vagy a játékos kilép, a lecke nem vész el: elmentjük, hol tartott,
-  // és legközelebb onnan folytatható. Egyszerre egy megszakított lecke lehet.
+  // Ha egy leckében elfogynak a szívek, vagy a játékos kilép, a lecke nem vész el: a szerver megjegyzi az állását
+  // (state.held), az eszköz pedig a feladatsort (local.paused), és legközelebb onnan folytatható.
   function pausedFor(i) {
-    const p = state.paused, L = LESSONS[i];
+    const p = local.paused, L = LESSONS[i], h = state.held;
     if (!p || p.i !== i || !L || (p.mode !== "lesson" && p.mode !== "exam") || !Array.isArray(p.queue) || p.pos >= p.queue.length) return null;
+    if (!h || h.i !== i || h.mode !== p.mode) return null;
     // Ha közben változott a tananyag, a mentés már nem használható.
     return p.queue.every((q) => (q.k === "tip" ? !!L.tips[q.ti] : !!EX_BY_KEY[q.key])) ? p : null;
   }
   function pauseSession(pos) {
     if (!S || !S.L || (S.mode !== "lesson" && S.mode !== "exam")) return;
-    state.paused = {
+    local.paused = {
       mode: S.mode, i: S.i, pos, total: S.total, correct: S.correct, answeredN: S.answeredN, firstRight: S.firstRight,
       mistakes: S.mistakes, maxCombo: S.maxCombo, xpBefore: S.xpBefore, at: Date.now(),
       queue: S.queue.map((q) => (q.kind === "tip" ? { k: "tip", ti: S.L.tips.indexOf(q.t) } : { k: "ex", key: q.ex.key, first: q.first })),
     };
+    saveExtras();
+  }
+  // A lecke közben adott válaszok elküldése (szívek, elrontott feladatok). end: "pause" (folytatható) vagy "quit".
+  // A következő lecke indítása megvárja (pendingFlush), hogy a szerver előbb a szünetet kapja meg.
+  let pendingFlush = Promise.resolve();
+  function flushAnswers(end) {
+    const s = S;
+    if (!s || !s.run) return pendingFlush;
+    const answers = s.log.splice(0), run = s.run;
+    if (end) s.run = null;
+    pendingFlush = act("answers", { run, answers, end }).then(() => {}, (e) => {
+      if (!end) s.log.unshift(...answers);
+      else s.run = run;
+      throw e;
+    });
+    return pendingFlush;
   }
 
-  function startSession(cfg) {
+  let starting = false;
+  async function startSession(cfg) {
+    if (starting) return;
     closeSheet();
     closePop();
     const M = MODES[cfg.mode];
     if (M.hearts && heartsNow() <= 0) { heartsSheet(); return; }
     const L = cfg.i != null ? LESSONS[cfg.i] : null;
-    if (cfg.fresh && state.paused && state.paused.i === cfg.i) { state.paused = null; save(); }
-    const P = M.hearts && L ? pausedFor(cfg.i) : null;
+    if (cfg.fresh && local.paused && local.paused.i === cfg.i) { local.paused = null; saveExtras(); }
+    let P = M.hearts && L ? pausedFor(cfg.i) : null;
+    // A szerver megjegyzi a lecke kezdetét (a befejezésnél ehhez méri, hogy életszerű volt-e), és az
+    // Aranykígyó árát is itt vonja le.
+    starting = true;
+    let run;
+    await pendingFlush.catch(() => {});
+    try { run = await act("start", { mode: cfg.mode, i: cfg.i, chapter: cfg.chapter, resume: !!P }); }
+    catch (e) { starting = false; actError(e); render(); return; }
+    starting = false;
+    if (P && !run.resumed) { P = null; local.paused = null; saveExtras(); }
     let exs = [], tips = [];
     if (P) exs = [null]; // a folytatott lecke sorát lent, a mentésből állítjuk vissza
     else if (cfg.mode === "lesson") { exs = L.ex.slice(); tips = L.tips; }
@@ -4129,6 +4518,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       ready: false, answered: false, ctrl: null, touched: false, busy: false, timeUp: false, deadline: 0,
       queue: [...tips.map((t) => ({ kind: "tip", t })), ...exs.map((ex) => ({ kind: "ex", ex, first: true }))],
       questsBefore: snapshotQuests(), xpBefore: state.xp, returnView: prefs.view, post: [],
+      run: run.run, log: [], // a szerveroldali lecke azonosítója és a még el nem küldött válaszok
     };
     if (P) {
       Object.assign(S, {
@@ -4250,6 +4640,14 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       actBtn.className = "btn " + (info.cls || "");
       altBtn.hidden = false;
       altBtn.textContent = "Kilépés";
+    } else if (mode === "saving") {
+      actBtn.textContent = "Mentés…";
+      actBtn.disabled = true;
+    } else if (mode === "retry") {
+      actBtn.textContent = "Újrapróbálom";
+      actBtn.className = "btn good";
+      altBtn.hidden = false;
+      altBtn.textContent = "Kilépés mentés nélkül";
     }
   }
   function setReady(v) {
@@ -4558,16 +4956,14 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     S.answered = true;
     S.answeredN++;
     S.ctrl.reveal(res.ok);
+    // A válasz hatását (szív, statisztika, küldetés, elrontott feladatok) a szerver számolja, amikor megkapja.
     if (res.ok) {
       S.correct++;
       S.combo++;
       S.maxCombo = Math.max(S.maxCombo, S.combo);
-      if (item.first && res.firstOk !== false) S.firstRight++;
-      state.stats.correct++;
-      state.stats.maxCombo = Math.max(state.stats.maxCombo, S.combo);
-      questEvent("correct", 1);
-      questEvent("combo", S.combo, true);
-      if ((S.mode === "practice" || S.mode === "mistakes") && state.mistakes[item.ex.key]) { delete state.mistakes[item.ex.key]; state.stats.fixed++; }
+      const first = !!(item.first && res.firstOk !== false);
+      if (first) S.firstRight++;
+      S.log.push({ k: item.ex.key, ok: true, f: first });
       sfx("good", S.combo);
       setFoot("good", { title: pick(PRAISE), why: fromMatch ? (S.matchMisses ? "Minden pár a helyén." : "Elsőre minden párt eltaláltál!") : item.ex.why });
       burstAt(S.ctrl.anchor && S.ctrl.anchor(), { n: 16, colors: [cssVar("--good-btn"), cssVar("--sun"), cssVar("--uc", lessonEl)] });
@@ -4576,9 +4972,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       S.mistakes++;
       S.combo = 0;
       item.first = false;
-      state.mistakes[item.ex.key] = Date.now();
+      S.log.push({ k: item.ex.key, ok: false });
       if (S.M.requeue) S.queue.push({ kind: "ex", ex: item.ex, first: false });
-      if (S.M.hearts) { loseHeart(); S.hearts = heartsNow(); }
+      if (S.M.hearts && !INFINITE_HEARTS) S.hearts = Math.max(0, S.hearts - 1);
       if (S.M.allowed != null) S.left--;
       sfx("bad");
       buzz(90);
@@ -4587,7 +4983,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       setFoot("bad", { title: pick(OOPS), answer: res.answer, why: item.ex.why });
     }
     S.touched = true;
-    save();
     setCombo(res.ok);
     updateBar(res.ok);
     actBtn.focus({ preventScroll: true });
@@ -4611,59 +5006,43 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     later(() => { S.busy = false; cb(); }, 170);
   }
 
-  function finish() {
+  // A lecke vége: a jutalmat (XP, drágakő, széria, küldetések, eredmények) a szerver számolja ki. Amíg válaszol,
+  // Tekla vár; ha nincs internet, újrapróbálható, és a lecke eredménye addig nem vész el.
+  async function finish() {
     clearInterval(timerInt);
-    const L = S.L, mode = S.mode, timed = !!S.M.timed;
-    const acc = timed ? (S.answeredN ? S.correct / S.answeredN : 0) : S.total ? S.firstRight / S.total : 1;
-    const stars = acc >= 0.9 ? 3 : acc >= 0.7 ? 2 : 1;
-    const perfect = !timed && S.total > 0 && S.firstRight === S.total;
-    let base = { lesson: 10, exam: 25, practice: 10, mistakes: 10, legendary: 20, jump: 15 }[mode] || 0;
-    if (timed) base = S.correct;
-    if (perfect && (mode === "lesson" || mode === "exam")) base += 5;
-    const beforeToday = todayXp();
-    const boosted = boostActive();
-    const gained = base ? addXp(base) : 0;
-    const streak = extendStreak();
-    let gems = { lesson: 2, exam: 10, legendary: 5, jump: 5, practice: 1, mistakes: 1 }[mode] || 0;
-    if (timed) gems = Math.min(5, Math.floor(S.correct / 4));
-    if (perfect) gems += 2;
-    addGems(gems);
-    const firstTime = L && !isDone(S.i);
-    if (mode === "lesson" || mode === "exam" || mode === "legendary") {
-      state.done[L.id] = (state.done[L.id] || 0) + 1;
-      state.best[L.id] = Math.max(state.best[L.id] || 0, stars);
-      state.stats.lessons++;
-      questEvent("lessons", 1);
-      if (perfect) { state.stats.perfect++; questEvent("perfect", 1); }
-      if (acc >= 0.9) questEvent("acc90", 1);
+    if (!S || S.saving) return;
+    S.saving = true;
+    const mode = S.mode, timed = !!S.M.timed;
+    $("lTop").hidden = true;
+    $("combo").replaceChildren();
+    stage.classList.remove("leaving");
+    stage.replaceChildren(el("div", { class: "l-inner result", style: "animation:none" }, tekla("still"), el("h2", null, "Mentés…")));
+    setFoot("saving");
+    let r;
+    try { r = await act("finish", { run: S.run, answers: S.log }); }
+    catch (e) {
+      S.saving = false;
+      stage.replaceChildren(el("div", { class: "l-inner result fail", style: "animation:none" }, tekla("sad"),
+        el("h2", null, "Nem sikerült menteni"),
+        el("p", { class: "note", style: "font-size:17px;max-width:420px" }, ((e && e.message) || "Hiba történt.") + " A lecke eredménye nem veszett el, próbáld újra!")));
+      setFoot("retry");
+      sfx("miss");
+      return;
     }
-    if (mode === "legendary") state.legend[L.id] = true;
-    if (mode === "practice" || mode === "mistakes" || timed) { state.stats.practice++; questEvent("practice", 1); }
-    if (mode === "practice" && !INFINITE_HEARTS) gainHearts(1);
-    // A befejezett lecke mentése törlődik; gyakorlás után felajánljuk a megszakított lecke folytatását.
-    if ((mode === "lesson" || mode === "exam") && state.paused && state.paused.i === S.i) state.paused = null;
-    if (mode === "practice" && state.paused && heartsNow() > 0 && !state.notices.some((n) => n.type === "resume")) state.notices.push({ type: "resume" });
-    if (timed) state.stats.timedBest = Math.max(state.stats.timedBest, S.correct);
-    let unlock = null;
-    if (mode === "jump") {
-      LESSONS.forEach((l, i) => { if (CH_POS[chapterOf(l)] < CH_POS[S.chapter] && !isDone(i)) { state.done[l.id] = 1; state.best[l.id] = state.best[l.id] || 1; } });
-      unlock = LESSON_POS[lessonsOfChapter(S.chapter)[0].id];
-      prefs.chapter = S.chapter;
-    } else if (firstTime && (mode === "lesson" || mode === "exam") && S.i + 1 < LESSONS.length) {
-      unlock = S.i + 1;
-      prefs.chapter = chapterOf(LESSONS[unlock]);
-    }
-    const newAch = checkAch();
-    save();
+    S.saving = false;
+    S.log = [];
+    S.run = null;
+    if ((mode === "lesson" || mode === "exam") && local.paused && local.paused.i === S.i) { local.paused = null; saveExtras(); }
+    const { gained, gems, acc, stars, perfect, boosted, unlock, streak, beforeToday } = r;
+    if (unlock != null) prefs.chapter = mode === "jump" ? S.chapter : chapterOf(LESSONS[unlock]);
     savePrefs();
     S.homeFx = { xpFrom: S.xpBefore, unlock, streakUp: !!streak };
     if (streak) S.post.push({ type: "streak", ...streak });
-    ensureQuests();
-    if (state.quests.list.some((q, i) => q.prog !== S.questsBefore[i])) S.post.push({ type: "quests", before: S.questsBefore });
+    const before = Array.isArray(r.q0) ? r.q0 : S.questsBefore;
+    if (state.quests && state.quests.list.some((q, i) => q.prog !== before[i])) S.post.push({ type: "quests", before });
+    const newAch = (r.ach || []).map((x) => ({ a: ACH.find((y) => y.id === x.id), tier: x.tier })).filter((x) => x.a);
     if (newAch.length) S.post.push({ type: "ach", list: newAch });
 
-    $("lTop").hidden = true;
-    $("combo").replaceChildren();
     const titles = { lesson: perfect ? "Hibátlan lecke!" : "Lecke teljesítve!", exam: "Vizsga kész!", practice: "Gyakorlás kész!", mistakes: "Szép javítás!", legendary: "Aranyba fordult!", jump: "Átmentél a szintfelmérőn!", timed: "Lejárt az idő!" };
     const perks = el("div", { class: "perks" });
     if (gems) perks.append(el("div", { class: "perk", style: "color:var(--gem)" }, icon("gem"), "+" + gems + " drágakő"));
@@ -4671,7 +5050,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     if (unlock != null && mode !== "jump") perks.append(el("div", { class: "perk", style: "color:var(--ink-soft)" }, icon("spark"), "Megnyílt: " + LESSONS[unlock].title));
     if (mode === "jump") perks.append(el("div", { class: "perk", style: "color:var(--blue)" }, icon("flag"), "Megnyílt a(z) " + (CH_POS[S.chapter] + 1) + ". fejezet"));
     if (mode === "legendary") perks.append(el("div", { class: "perk", style: "color:var(--legend-deep)" }, icon("goldsnake"), "Arany állomás a térképen"));
-    if (mode === "practice" && !INFINITE_HEARTS) perks.append(el("div", { class: "perk", style: "color:var(--heart)" }, icon("heart"), "+1 szív"));
+    if (r.heart) perks.append(el("div", { class: "perk", style: "color:var(--heart)" }, icon("heart"), "+1 szív"));
     if (timed && S.correct >= state.stats.timedBest && S.correct > 0) perks.append(el("div", { class: "perk", style: "color:var(--blue)" }, icon("trophy"), "Új rekord!"));
     const pctAcc = Math.round(acc * 100);
     const xpVal = el("span", null, "+" + (REDUCED ? gained : 0));
@@ -4750,13 +5129,24 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     actBtn.focus({ preventScroll: true });
   }
 
-  // Feltöltés után ugyanott megy tovább a lecke, ahol a szívek elfogytak.
-  function continueAfterRefill() {
+  // Feltöltés után ugyanott megy tovább a lecke, ahol a szívek elfogytak (a szerveren is a félbehagyott lecke folytatódik).
+  async function continueAfterRefill() {
+    if (S.busyRefill) return;
+    S.busyRefill = true;
+    let r;
+    try {
+      await pendingFlush.catch(() => {});
+      await act("buy", { kind: "refill" });
+      r = await act("start", { mode: S.mode, i: S.i, resume: true });
+    } catch (e) { S.busyRefill = false; actError(e); return; }
+    S.busyRefill = false;
+    if (!r.resumed) { toast("Ezt a leckét elölről kell kezdened."); closeLesson(); return; }
+    S.run = r.run;
     S.hearts = heartsNow();
     S.failed = false;
     S.failKind = null;
-    state.paused = null;
-    save();
+    local.paused = null;
+    saveExtras();
     sfx("coin");
     $("lTop").hidden = false;
     updateHearts(false);
@@ -4769,9 +5159,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     stage.classList.remove("leaving");
     $("combo").replaceChildren();
     const hearts = kind === "hearts";
-    // Elfogyott szívnél a lecke nem vész el: elmentjük, és onnan folytatható, ahol abbahagyta.
-    if (hearts) { pauseSession(S.pos + 1); save(); }
-    const kept = hearts && state.paused;
+    // Elfogyott szívnél a lecke nem vész el: a szerver megjegyzi az állását, és onnan folytatható.
+    // Túl sok hibánál (Aranykígyó, szintfelmérő) a lecke lezárul.
+    if (hearts) pauseSession(S.pos + 1);
+    flushAnswers(hearts && (S.mode === "lesson" || S.mode === "exam") ? "pause" : "quit").catch(() => {});
+    const kept = hearts && local.paused;
     stage.replaceChildren(el("div", { class: "l-inner result fail", style: "animation:none" },
       tekla("sad"),
       el("h2", null, hearts ? "Elfogytak a szívek" : "Túl sok hiba"),
@@ -4800,7 +5192,6 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     window.scrollTo(0, 0);
     if (homeFx) playHomeFx(homeFx);
     setTimeout(showNotices, 400);
-    if (NET.pendingRemote) { const r = NET.pendingRemote; NET.pendingRemote = null; if (remoteWins(r, state)) takeServerState(r); }
   }
   // Lecke után: az XP felpörög, és az újonnan megnyílt állomás lakatja lepattan.
   function playHomeFx(f) {
@@ -4848,7 +5239,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("div", { class: "row" },
         el("button", { class: "btn", type: "button", onclick: closeSheet }, "Folytatom"),
         el("button", { class: "btn ghost", type: "button", onclick: () => {
-          if (keeps) { pauseSession(S.answered ? S.pos + 1 : S.pos); save(); }
+          // A válaszok hatása (szívek, elrontott feladatok) így is érvényes; a lecke folytatható, ha volt haladás.
+          if (keeps) pauseSession(S.answered ? S.pos + 1 : S.pos);
+          flushAnswers(keeps ? "pause" : "quit").catch(() => {});
           closeSheet(); closeLesson();
         } }, "Kilépek")));
     sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
@@ -4862,12 +5255,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     else if (footMode === "fail") {
       const cfg = { mode: S.mode, i: S.i, chapter: S.chapter };
       if (S.failKind === "hearts") {
-        if (state.gems >= PRICE.refill) { spend(PRICE.refill); state.hearts = HEART_MAX; continueAfterRefill(); }
+        if (state.gems >= PRICE.refill) continueAfterRefill();
         else startSession({ mode: "practice" });
       } else startSession(cfg);
-    }
+    } else if (footMode === "retry") finish();
   });
-  altBtn.addEventListener("click", () => { if (footMode === "fail") closeLesson(); });
+  altBtn.addEventListener("click", () => { if (footMode === "fail" || footMode === "retry") closeLesson(); });
   $("quitBtn").addEventListener("click", askQuit);
 
   document.addEventListener("keydown", (e) => {
@@ -4897,10 +5290,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const t = today();
     if (t !== lastDayKey) {
       lastDayKey = t;
-      ensureQuests();
-      settleStreak();
-      rollWeek(leagueMode());
-      if (!S) { render(); showNotices(); }
+      // Napváltás: széria, hét és küldetések (saját szerveren a szerver könyveli).
+      if (!S) refreshState().then(() => { if (!S) { render(); showNotices(); } });
       return;
     }
     const chip = document.querySelectorAll(".boost-left");
@@ -4909,21 +5300,56 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       else chip.forEach((c) => (c.textContent = "2× " + fmtClock(state.boostUntil - Date.now())));
     }
   }
+  // Weboldalként (kodkigyo.hu) internet kell, mert a haladást a szerver menti. Ha nem érjük el, ezt a képernyőt
+  // mutatjuk, és amint visszajön a kapcsolat (vagy a gombra koppint), újrapróbáljuk.
+  let offlineEl = null, connecting = false;
+  function showOffline() {
+    if (offlineEl) return;
+    closeGate();
+    const btn = el("button", { class: "btn wide", type: "button", onclick: () => reconnect() }, "Újrapróbálom");
+    offlineEl = el("div", { class: "gate", role: "dialog", "aria-modal": "true", "aria-labelledby": "offTitle" },
+      el("div", { class: "gate-in" }, tekla("sad", []),
+        el("h1", { id: "offTitle" }, "Nincs kapcsolat"),
+        el("p", { class: "gate-lead" }, "A Kódkígyóhoz internet kell, mert a haladásodat a szerver menti. Ellenőrizd a kapcsolatot, és próbáld újra!"),
+        btn));
+    document.body.append(offlineEl);
+    appEl.inert = true;
+    tabbar.inert = true;
+  }
+  function hideOffline() {
+    if (!offlineEl) return;
+    offlineEl.remove();
+    offlineEl = null;
+    appEl.inert = false;
+    tabbar.inert = false;
+  }
+  async function reconnect() {
+    if (connecting) return;
+    connecting = true;
+    const btn = offlineEl && offlineEl.querySelector("button");
+    if (btn) { btn.disabled = true; btn.textContent = "Kapcsolódás…"; }
+    const ok = await connectServer();
+    connecting = false;
+    if (ok) { hideOffline(); gatePending = false; syncGate(); render(); showNotices(); }
+    else if (btn) { btn.disabled = false; btn.textContent = "Újrapróbálom"; }
+  }
+  window.addEventListener("online", () => { if (offlineEl) reconnect(); });
+
   function start(data) {
     if (data && data.state) state = normalize(data.state);
     else loadLocal();
+    loadExtras();
     if (data && data.prefs) prefs = { ...prefs, ...data.prefs };
     applyTheme();
     applySkin();
     buildShell();
-    ensureQuests();
-    syncHearts();
-    settleStreak();
     const hasRuntime = !!(window.claude && typeof window.claude.use === "function");
-    // A fiókot már a kapcsolódás előtt ismerjük, hogy a hetet ne a gépi ellenfelek alapján zárjuk le.
+    const web = !hasRuntime && /^https?:$/.test(location.protocol);
     if (!hasRuntime) { try { NET.token = localStorage.getItem(ACCOUNT_KEY); } catch (e) {} }
     // Fiók nélkül weboldalként rögtön az üdvözlő képernyő jön (amíg a szerver válaszol, „Kapcsolódás…”).
-    gatePending = !hasRuntime && /^https?:$/.test(location.protocol) && !NET.token;
+    gatePending = web && !NET.token;
+    // Fájlként megnyitva az app maga könyveli a napváltást (weboldalként a szerver).
+    if (!web && !hasRuntime) act("tick").catch(() => {});
     const hashView = (location.hash || "").slice(1);
     const fromHash = { tanulas: "learn", gyakorlas: "practice", liga: "league", kuldetesek: "quests", bolt: "shop", profil: "profile" }[hashView];
     if (["jogi", "impresszum", "adatvedelem", "sutik", "feltetelek"].includes(hashView)) openLegal(hashView === "jogi" ? null : hashView);
@@ -4931,10 +5357,11 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     setTimeout(showNotices, 500);
     setInterval(tick, 1000);
     // claude.ai-on az artifact futtatókörnyezete, saját domainen a Cloudflare Worker adja az online részt.
-    (hasRuntime ? connectRemote() : connectServer()).then(() => {
+    (hasRuntime ? connectRemote() : connectServer()).then(async (ok) => {
       gatePending = false;
+      if (web && !ok) { showOffline(); return; }
       syncGate();
-      rollWeek(leagueMode());
+      if (hasRuntime) await act("tick").catch(() => {});
       if (!S && !popOpen) render();
       if (!S) showNotices();
     });

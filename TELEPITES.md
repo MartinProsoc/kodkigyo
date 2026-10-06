@@ -2,6 +2,8 @@
 
 Az app (`index.html`) és a szerver (`src/worker.js`) egyetlen Cloudflare Workerként fut. A Worker kiszolgálja az oldalt, és az `/api/...` címeken kezeli a fiókokat, a barátokat és az osztályligát. Az adatok egy D1 adatbázisban vannak, az EU-ban. A kód a GitHubon van (`MartinProsoc/kodkigyo`), és a Cloudflare minden feltöltés után magától telepíti.
 
+**A haladás és a gazdaság a szerveren dől el.** Az app csak azt küldi el, mit csinált a játékos (`POST /api/act`: elkezdett vagy befejezett egy leckét, kinyitott egy ládát, vásárolt), az XP-t, a drágakövet, a szériát és a ládák tartalmát pedig a szerver számolja ki. A szabályok egyetlen helyen vannak: az `index.html` RULES-jelölőkkel körülvett részeiben. A build lépés (`scripts/prepare.mjs`) ezeket a tananyaggal együtt kimásolja a `src/rules.gen.js` fájlba, ezt a szerver használja. Ezt a fájlt ne szerkeszd, és ne töltsd fel, minden buildnél újra elkészül. Emiatt a kodkigyo.hu-hoz internet kell. Fájlként megnyitva az app ugyanezekkel a szabályokkal, helyben működik.
+
 ## 1. Első telepítés a gépedről
 
 Minden parancsot ebben a mappában futtass (VS Code: Terminal › New Terminal).
@@ -65,12 +67,21 @@ npm run dev
 ```
 Utána nyisd meg: http://localhost:8787
 
+Automatikus teszteléshez két kapcsoló van. **Élesben soha ne állítsd be őket**, a `wrangler.jsonc`-be se írd bele:
+- `--var DEV_MODE:1`: mindenki használhatja a tesztpanel műveleteit (például XP vagy drágakő adása).
+- `--var RELAXED_PACE:1`: a szerver nem ellenőrzi, hogy a lecke életszerű tempóban készült-e. A tesztelő program ugyanis sokkal gyorsabban válaszol, mint egy ember.
+
+Példa: `npx wrangler dev --var DEV_MODE:1 --var RELAXED_PACE:1`
+
 ## Moderálás
 
 A legegyszerűbb az appból: lépj be az üzemeltetői fiókkal (`ADMIN_IDS`), és nyisd meg ezt: **Profil › Teszt › Jelentések és keresés**. Ha valakit jelentettek, a Teszt gombon piros szám jelzi. Ott ezeket teheted:
 - **Átnevezés:** a becenév „Játékos XXXXXX” lesz, a jelentései törlődnek.
 - **Rendben van:** lezárod a jelentéseket.
+- **Nullázás:** csalásnál. A játékos XP-je és mentése a kezdőállapotra áll, a fiókja megmarad.
 - **Fiók törlése:** nem vonható vissza.
+
+A listában a gyanús játékosok is megjelennek, például ha a heti XP-je több az összesnél, vagy képtelen mennyiségű drágaköve van. Mióta a gazdaság a szerveren van, ilyen csak a régi, átállás előtti adatoknál fordulhat elő.
 
 Becenévre vagy barátkódra kereshetsz is, például ha valaki e-mailben jelez egy játékost.
 
