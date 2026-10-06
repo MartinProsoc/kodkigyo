@@ -16,6 +16,12 @@ const LEAGUE_MAX = 9;
 const MAX_BODY = 300000;
 const DAY = 86400000;
 const WEEKLY_CAP = 5000;
+// Csalás elleni XP-korlátok. Egy lecke 10–15 XP (dupla XP-vel 30), és legalább egy perc, ezért:
+const XP_PER_MIN = 30;      // percenként legfeljebb ennyi XP gyűlhet
+const XP_BURST = 600;       // egy szinkronnál legfeljebb ennyi (hosszabb szünet után is)
+const FIRST_SYNC_XP = 5000; // a fiók előtt, offline gyűjtött XP-ből legfeljebb ennyi kerül át
+const DAY_XP = 750;         // a heti ligában a hét minden napjára legfeljebb ennyi XP jut
+const GEMS_SUSPICIOUS = 100000; // ennyi drágakő tisztességesen nem gyűlhet össze
 const GROUP_SIZE = 30;
 const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
 const REPORT_REASONS = ["nick", "other"];
@@ -193,8 +199,9 @@ async function social(p, env) {
   let lastResult = null;
   try { lastResult = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
   const admin = isAdmin(env, p.id);
-  // Az üzemeltető látja, hány jelentett játékos vár moderálásra.
-  const reported = admin ? (await env.DB.prepare("SELECT COUNT(DISTINCT target) AS n FROM reports").first()).n : undefined;
+  // Az üzemeltető látja, hány jelentett vagy gyanús (a heti XP-je több az összesnél) játékos vár moderálásra.
+  const reported = admin ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM (SELECT target AS id FROM reports
+    UNION SELECT w.player_id FROM weekly w JOIN players p ON p.id = w.player_id WHERE w.week_key = ? AND w.xp > p.xp)`).bind(wk).first()).n : undefined;
   return json({
     week: wk,
     me: { ...publicProfile(p, mine ? mine.xp : 0, wk), code: p.code, classId: p.class_id, lastResult, admin, reported },
@@ -212,10 +219,13 @@ async function putMe(p, req, env) {
   if (b.nick != null) { sets.push("nick = ?"); binds.push(cleanName(b.nick, 2, 20, "becenév")); }
   const s = b.stats;
   if (s && typeof s === "object") {
-    // Csalás elleni korlát: percenként legfeljebb 100 XP gyűlhet. Az első szinkronnál
-    // a fiók előtt, offline gyűjtött XP-t is elfogadjuk.
-    const allow = p.seeded ? Math.min(3000, Math.max(0, now - p.stats_at) / 60000 * 100) : 100000;
+    // Csalás elleni korlát: az összes XP percenként legfeljebb XP_PER_MIN-nel nőhet. Az első szinkronnál
+    // a fiók előtt, offline gyűjtött XP-t is elfogadjuk (legfeljebb FIRST_SYNC_XP-t).
+    const allow = p.seeded ? Math.min(XP_BURST, Math.max(0, now - p.stats_at) / 60000 * XP_PER_MIN) : FIRST_SYNC_XP;
     const xp = Math.min(int(s.xp, 10000000), p.xp + Math.floor(allow));
+    // A heti (liga-) XP csak annyival nőhet, amennyivel ebben a szinkronban az összes XP nőtt.
+    // Így nem lehet a heti XP-t úgy felhúzni, hogy közben semmit sem tanult (2026-10-06-i eset).
+    let budget = Math.max(0, xp - p.xp);
     sets.push("xp = ?", "streak = ?", "best_streak = ?", "last_day = ?", "lessons = ?", "ach = ?", "skin = ?", "stats_at = ?", "seeded = 1");
     binds.push(Math.max(xp, 0), int(s.streak, 5000), int(s.bestStreak, 5000), isDay(s.lastDay) ? s.lastDay : p.last_day,
       int(s.lessons, 500), int(s.ach, 1000), SKINS.includes(s.skin) ? s.skin : "classic", now);
@@ -225,10 +235,14 @@ async function putMe(p, req, env) {
     const weeks = [];
     if (s.weekKey === wk || s.weekKey === prev) weeks.push([s.weekKey, int(s.weekXp, WEEKLY_CAP)]);
     if (s.prevWeek && typeof s.prevWeek === "object" && s.prevWeek.key === prev) weeks.push([prev, int(s.prevWeek.xp, WEEKLY_CAP)]);
+    // A hét eddig eltelt napjai (hétfő = 1): naponta legfeljebb DAY_XP gyűlhet a ligában.
+    const dayIdx = Math.round((Date.parse(dayKey(now)) - Date.parse(wk)) / DAY) + 1;
     for (const [k, v] of weeks) {
       const cur = await env.DB.prepare("SELECT xp FROM weekly WHERE player_id = ? AND week_key = ?").bind(p.id, k).first();
       const had = cur ? cur.xp : 0;
-      const next = Math.max(had, Math.min(v, had + Math.floor(allow)));
+      const step = Math.min(Math.max(0, Math.min(v, DAY_XP * (k === wk ? dayIdx : 7)) - had), budget);
+      budget -= step;
+      const next = had + step;
       if (next !== had) {
         await env.DB.prepare("INSERT INTO weekly (player_id, week_key, xp) VALUES (?1, ?2, ?3) ON CONFLICT (player_id, week_key) DO UPDATE SET xp = ?3")
           .bind(p.id, k, next).run();
@@ -386,24 +400,54 @@ async function deleteAccount(p, env) {
 }
 
 // ---------- Moderálás (csak az üzemeltetőnek) ----------
+// Gyanús jelek: a heti XP több, mint az összes; képtelen mennyiségű drágakő; sok XP egyetlen lecke nélkül.
+function suspicion(r) {
+  const out = [];
+  if ((r.wxp || 0) > r.xp) out.push("heti XP (" + r.wxp + ") több, mint az összes XP (" + r.xp + ")");
+  if (Number(r.gems) > GEMS_SUSPICIOUS) out.push("képtelen mennyiségű drágakő (" + Number(r.gems).toLocaleString("hu-HU") + ")");
+  if (r.xp >= 300 && !r.lessons) out.push(r.xp + " XP egyetlen lecke nélkül");
+  return out;
+}
 function modRow(r) {
   return {
-    id: r.id, nick: r.nick, code: r.code, xp: r.xp, joined: dayKey(r.created_at), seen: dayKey(r.updated_at),
+    id: r.id, nick: r.nick, code: r.code, xp: r.xp, weekXp: r.wxp || 0, joined: dayKey(r.created_at), seen: dayKey(r.updated_at),
     reports: r.cnt || 0, nickReports: r.nick_cnt || 0, reporters: r.reporters || 0, last: r.last ? dayKey(r.last) : "",
+    flags: suspicion(r),
   };
 }
-const MOD_COLS = "p.*, COUNT(r.id) AS cnt, SUM(r.reason = 'nick') AS nick_cnt, COUNT(DISTINCT r.reporter) AS reporters, MAX(r.created_at) AS last";
+// ?1: az aktuális hét kulcsa (a heti XP-hez).
+const MOD_COLS = `p.*, COUNT(r.id) AS cnt, SUM(r.reason = 'nick') AS nick_cnt, COUNT(DISTINCT r.reporter) AS reporters, MAX(r.created_at) AS last,
+  (SELECT xp FROM weekly w WHERE w.player_id = p.id AND w.week_key = ?1) AS wxp,
+  (SELECT json_extract(data, '$.gems') FROM progress pr WHERE pr.player_id = p.id) AS gems`;
+// A jelentett és a gyanús játékosok (az utóbbiak közül a 14 napon belül aktívak), elöl a gyanúsak.
 async function adminReports(env) {
-  const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM reports r JOIN players p ON p.id = r.target GROUP BY p.id ORDER BY reporters DESC, last DESC LIMIT 100`).all()).results || [];
-  return json({ players: rows.map(modRow) });
+  const now = Date.now();
+  const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM players p LEFT JOIN reports r ON r.target = p.id
+    WHERE r.id IS NOT NULL OR p.updated_at > ?2 GROUP BY p.id
+    HAVING cnt > 0 OR wxp > p.xp OR CAST(gems AS REAL) > ?3 OR (p.xp >= 300 AND p.lessons = 0)
+    ORDER BY reporters DESC, last DESC LIMIT 200`).bind(weekKey(now), now - 14 * DAY, GEMS_SUSPICIOUS).all()).results || [];
+  const players = rows.map(modRow).sort((a, b) => (b.flags.length > 0) - (a.flags.length > 0));
+  return json({ players });
 }
 async function adminFind(env, q) {
   const s = String(q || "").normalize("NFC").trim().slice(0, 30);
   if (s.length < 2) throw new HttpError(400, "Legalább 2 karaktert írj be.");
   const like = "%" + s.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
   const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM players p LEFT JOIN reports r ON r.target = p.id
-    WHERE p.id = ?1 OR p.code = ?1 OR p.nick LIKE ?2 ESCAPE '\\' GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 30`).bind(s.toUpperCase(), like).all()).results || [];
+    WHERE p.id = ?2 OR p.code = ?2 OR p.nick LIKE ?3 ESCAPE '\\' GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 30`).bind(weekKey(Date.now()), s.toUpperCase(), like).all()).results || [];
   return json({ players: rows.map(modRow) });
+}
+// Nullázás csalás után: a heti XP 0, a mentés a kezdőállapotra áll (új korszakkal, így az app minden
+// eszközön ezt tölti be, és a régi, meghamisított mentés nem írhatja felül). A fiók és a becenév marad.
+async function resetPlayer(env, t) {
+  const now = Date.now(), wk = weekKey(now);
+  const data = JSON.stringify({ v: 2, epoch: now, owner: t.id, gems: 50, joined: dayKey(t.created_at), code: t.code, updatedAt: now });
+  await env.DB.batch([
+    env.DB.prepare("UPDATE weekly SET xp = 0 WHERE player_id = ? AND week_key >= ?").bind(t.id, addDays(wk, -7)),
+    env.DB.prepare("UPDATE players SET xp = 0, streak = 0, best_streak = 0, last_day = NULL, lessons = 0, ach = 0, skin = 'classic', acc = '', stats_at = ?2, seeded = 1, updated_at = ?2 WHERE id = ?1").bind(t.id, now),
+    env.DB.prepare("INSERT INTO progress (player_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (player_id) DO UPDATE SET data = ?2, updated_at = ?3").bind(t.id, data, now),
+    env.DB.prepare("DELETE FROM reports WHERE target = ?").bind(t.id),
+  ]);
 }
 async function adminAct(p, req, env) {
   const b = await readJson(req);
@@ -420,6 +464,10 @@ async function adminAct(p, req, env) {
   }
   if (b.action === "dismiss") {
     await env.DB.prepare("DELETE FROM reports WHERE target = ?").bind(t.id).run();
+    return json({ ok: true });
+  }
+  if (b.action === "reset") {
+    await resetPlayer(env, t);
     return json({ ok: true });
   }
   if (b.action === "delete") {

@@ -3504,7 +3504,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("div", { class: "view-head", style: "flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px" }, el("h1", null, "Profil"),
         el("div", { style: "display:flex;flex-wrap:wrap;gap:8px" },
           devMode() ? el("button", { class: "btn ghost sm", type: "button", id: "devBtn", onclick: devPanel }, icon("bolt"), "Teszt",
-            modOn() && NET.me.reported ? el("span", { class: "dev-count", title: "Jelentett játékosok" }, String(NET.me.reported)) : null) : null,
+            modOn() && NET.me.reported ? el("span", { class: "dev-count", title: "Moderálásra vár" }, String(NET.me.reported)) : null) : null,
           el("button", { class: "btn ghost sm", type: "button", onclick: settingsSheet }, icon("gear"), "Beállítások"))),
       head);
     if (online()) {
@@ -3930,7 +3930,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
       el("h3", { id: "sheetTitle" }, "Tesztpanel"),
       el("p", { class: "meta" }, "Kipróbálhatod vele a játék részeit. A saját mentésedet módosítja, a ligában versenyző heti XP-hez nem nyúl."),
-      modOn() ? sec("Moderálás", NET.me.reported ? NET.me.reported + " jelentett játékos vár" : "nincs új jelentés",
+      modOn() ? sec("Moderálás", NET.me.reported ? NET.me.reported + " jelentett vagy gyanús játékos" : "nincs teendő",
         row(el("button", { class: "btn ghost sm", type: "button", onclick: () => modPanel() }, icon("shield"), "Jelentések és keresés"))) : null,
       sec("Drágakövek", "most " + state.gems, row(act("+50", () => addGems(50)), act("+500", () => addGems(500)), act("Nullázás", () => { state.gems = 0; }))),
       sec("Szívek", "most " + heartsNow() + "/" + HEART_MAX, row(act("Feltöltés", () => { state.hearts = HEART_MAX; }), act("Elfogyasztás", () => { state.hearts = 0; state.heartTs = Date.now(); }))),
@@ -3971,15 +3971,15 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     openSheet(null,
       el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
       el("h3", { id: "sheetTitle" }, "Moderálás"),
-      el("p", { class: "meta" }, query ? "Találatok erre: „" + query + "”. Üres kereséssel visszakapod a jelentett játékosokat."
-        : "A jelentett játékosok, elöl azok, akiket a legtöbben jelentettek. Az átnevezés a becenevet „Játékos” és a barátkód formára cseréli, és lezárja a jelentéseket."),
+      el("p", { class: "meta" }, query ? "Találatok erre: „" + query + "”. Üres kereséssel visszakapod a jelentett és a gyanús játékosokat."
+        : "Elöl a gyanús (valószínűleg csaló) játékosok, utánuk a jelentettek. Az átnevezés a becenevet „Játékos” és a barátkód formára cseréli. A nullázás a csalással szerzett XP-t és drágaköveket veszi el."),
       el("div", { class: "row" }, q, find),
       list,
       el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: devPanel }, "Tesztpanel"), el("button", { class: "btn", type: "button", onclick: closeSheet }, "Kész")));
     try {
       const r = await api("GET", query ? "admin/find?q=" + encodeURIComponent(query) : "admin/reports");
       list.replaceChildren(...(r.players.length ? r.players.map((p) => modItem(p, query))
-        : [el("p", { class: "note" }, query ? "Nincs találat." : "Nincs jelentett játékos. Minden rendben!")]));
+        : [el("p", { class: "note" }, query ? "Nincs találat." : "Nincs jelentett vagy gyanús játékos. Minden rendben!")]));
     } catch (e) { list.replaceChildren(el("p", { class: "note" }, e.message)); }
   }
   // Művelet után frissítjük a jelentésszámot is (Profil › Teszt gomb).
@@ -3992,20 +3992,30 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const rep = p.reports
       ? p.reports + " jelentés" + (p.nickReports ? " (" + p.nickReports + " a becenév miatt)" : "") + ", " + p.reporters + " játékostól · legutóbb " + p.last
       : "nincs jelentés";
+    const flags = p.flags || [];
     return el("div", { class: "mod-row" },
       el("div", { class: "mod-who" }, el("b", null, p.nick),
-        el("small", null, [p.code, fmtNum(p.xp) + " XP", "csatlakozott " + p.joined, "utoljára aktív " + p.seen].join(" · ")),
+        el("small", null, [p.code, fmtNum(p.xp) + " XP", fmtNum(p.weekXp || 0) + " XP a héten", "csatlakozott " + p.joined, "utoljára aktív " + p.seen].join(" · ")),
+        flags.map((f) => el("small", { class: "mod-rep" }, "Gyanús: " + f)),
         el("small", { class: p.reports ? "mod-rep" : null }, rep)),
       el("div", { class: "dev-row" },
         el("button", { class: "btn ghost sm", type: "button", onclick: act("rename", "Átnevezve: Játékos " + p.code) }, "Átnevezés"),
         p.reports ? el("button", { class: "btn ghost sm", type: "button", onclick: act("dismiss", "A jelentéseket lezártad.") }, "Rendben van") : null,
-        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modDelete(p, query) }, "Fiók törlése") : null));
+        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modConfirm(p, query, "reset") }, "Nullázás") : null,
+        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modConfirm(p, query, "delete") }, "Fiók törlése") : null));
   }
-  function modDelete(p, query) {
-    const btn = el("button", { class: "btn bad", type: "button" }, "Törlés");
-    btn.addEventListener("click", () => busy(btn, null, async () => { await modAct(p.id, "delete"); toast("A fiókot törölted."); modPanel(query); }));
-    openSheet(null, el("h3", { id: "sheetTitle" }, "Törlöd „" + p.nick + "” fiókját?"),
-      el("p", { class: "meta" }, "A játékos minden adata törlődik, és ez nem vonható vissza. Csak akkor használd, ha az átnevezés nem elég, például ha valaki újra és újra bántó nevet ad meg."),
+  function modConfirm(p, query, action) {
+    const del = action === "delete";
+    const btn = el("button", { class: "btn bad", type: "button" }, del ? "Törlés" : "Nullázás");
+    btn.addEventListener("click", () => busy(btn, null, async () => {
+      await modAct(p.id, action);
+      toast(del ? "A fiókot törölted." : "„" + p.nick + "” haladását nulláztad.");
+      modPanel(query);
+    }));
+    openSheet(null, el("h3", { id: "sheetTitle" }, (del ? "Törlöd" : "Nullázod") + " „" + p.nick + "” " + (del ? "fiókját?" : "haladását?")),
+      el("p", { class: "meta" }, del
+        ? "A játékos minden adata törlődik, és ez nem vonható vissza. Csak akkor használd, ha az átnevezés vagy a nullázás nem elég, például ha valaki újra és újra bántó nevet ad meg."
+        : "Csaláskor használd. A heti és az összes XP-je 0 lesz, a mentése a kezdőállapotra áll vissza: 50 drágakő, a vásárlásai és a leckéi elvesznek. A fiók, a becenév és a barátai megmaradnak, tisztességesen újrakezdheti. Nem vonható vissza."),
       el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => modPanel(query) }, "Mégsem"), btn));
   }
 
