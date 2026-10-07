@@ -1,9 +1,3 @@
-// Kódkígyó szerver: Cloudflare Worker + D1.
-// A /api/* kéréseket ez kezeli, minden mást a statikus fájlok (public/) szolgálnak ki.
-//
-// A játékos haladása és vagyona (XP, széria, drágakő, szívek, vásárlások, ládák) a szerveren dől el: az app csak
-// azt küldi el, mit csinált (POST /api/act), és a szerver az app saját szabályaival (src/rules.gen.js, az index.html
-// RULES részeiből generálva) számolja ki az eredményt. Az app által küldött mentést vagy statisztikát nem veszi át.
 import { RULES } from "./rules.gen.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -11,12 +5,11 @@ const LEAGUE_MAX = 9;
 const MAX_BODY = 300000;
 const DAY = 86400000;
 const WEEKLY_CAP = 5000;
-const DAY_XP = 750;         // a heti ligában a hét minden napjára legfeljebb ennyi XP jut (biztonsági korlát)
-const GEMS_SUSPICIOUS = 100000; // ennyi drágakő tisztességesen nem gyűlhet össze
+const DAY_XP = 750;
+const GEMS_SUSPICIOUS = 100000;
 const GROUP_SIZE = 30;
-const LEAGUE_REWARDS = [40, 25, 15]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
+const LEAGUE_REWARDS = [40, 25, 15];
 const REPORT_REASONS = ["nick", "other"];
-// Durva szavak a becenevekhez (ékezet nélkül, kisbetűvel; a számokat betűvé alakítva is ellenőrizzük).
 const BAD_WORDS = ["fasz", "geci", "kurva", "picsa", "pina", "buzi", "ribanc", "kocsog", "bazd", "baszd", "fuck", "shit", "bitch", "cunt", "nigg", "hitler", "porn"];
 
 class HttpError extends Error {
@@ -30,7 +23,6 @@ function json(data, status = 200) {
   });
 }
 
-// ---------- Segédfüggvények ----------
 function randomCode(n) {
   let s = "";
   while (s.length < n) {
@@ -52,7 +44,6 @@ function safeEqual(a, b) {
 }
 const int = (v, max) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0; };
 
-// A hetek magyar idő szerint hétfőn kezdődnek, ugyanúgy, mint az appban.
 const bpDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
 function dayKey(ms) { return bpDate.format(new Date(ms)); }
 function addDays(key, n) {
@@ -108,11 +99,8 @@ async function authenticate(req, env) {
   return p;
 }
 
-// Az üzemeltető fiókja(i) (wrangler.jsonc: vars.ADMIN_IDS). Nekik az app tesztpanelt mutat, és csak ők
-// használhatják a moderálás végpontjait (/api/admin/...): jelentések, keresés, átnevezés, nullázás, törlés, új belépőkód.
 const isAdmin = (env, id) => String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(id);
 
-// Nyilvános profil: ennyit lát egy játékosról a barátja vagy az osztálytársa.
 function publicProfile(p, weekXp, wk) {
   return {
     id: p.id, nick: p.nick, xp: p.xp, streak: p.streak, bestStreak: p.best_streak, lastDay: p.last_day || "",
@@ -120,8 +108,6 @@ function publicProfile(p, weekXp, wk) {
   };
 }
 
-// Cloudflare Turnstile robotszűrő a fiók létrehozásához. Csak akkor kapcsol be, ha a nyilvános
-// kulcs (vars.TURNSTILE_SITEKEY) és a titkos kulcs (TURNSTILE_SECRET titok) is be van állítva.
 const captchaOn = (env) => Boolean(env.TURNSTILE_SITEKEY && env.TURNSTILE_SECRET);
 async function checkCaptcha(env, token, ip) {
   if (typeof token !== "string" || !token || token.length > 2048) throw new HttpError(400, "Előbb várd meg a robotszűrő ellenőrzését!");
@@ -139,13 +125,11 @@ async function checkCaptcha(env, token, ip) {
   if (!ok) throw new HttpError(400, "A robotszűrő ellenőrzése nem sikerült. Próbáld újra!");
 }
 
-// ---------- Végpontok ----------
 async function register(req, env) {
   const body = await readJson(req);
   const nick = cleanName(body.nick, 2, 20, "becenév");
   const ip = req.headers.get("cf-connecting-ip") || "local";
   if (captchaOn(env)) await checkCaptcha(env, body.captcha, ip);
-  // Egy iskola minden gépe gyakran ugyanazon az IP-címen van, ezért egy egész évfolyamnyi regisztrációt engedünk óránként.
   await rateLimit(env, "reg:" + (await sha256("kodkigyo:" + ip)).slice(0, 24), 150, 3600000);
   const secret = randomCode(16), hash = await sha256(secret), now = Date.now();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -163,7 +147,6 @@ async function register(req, env) {
 
 async function social(p, env) {
   const wk = weekKey(Date.now());
-  // Ha a múlt heti csoportját az óránkénti zárás még nem érte el, most lezárjuk, hogy friss legyen a ligája.
   const prev = await env.DB.prepare("SELECT grp FROM weekly WHERE player_id = ? AND week_key = ? AND grp IS NOT NULL").bind(p.id, addDays(wk, -7)).first();
   if (prev && (await closeGroup(env, prev.grp))) p = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(p.id).first();
   const rows = (sql, ...args) => env.DB.prepare(sql).bind(...args).all().then((r) => r.results || []);
@@ -189,7 +172,6 @@ async function social(p, env) {
   let lastResult = null;
   try { lastResult = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
   const admin = isAdmin(env, p.id);
-  // Az üzemeltető látja, hány jelentett vagy gyanús (a heti XP-je több az összesnél) játékos vár moderálásra.
   const reported = admin ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM (SELECT target AS id FROM reports
     UNION SELECT w.player_id FROM weekly w JOIN players p ON p.id = w.player_id WHERE w.week_key = ? AND w.xp > p.xp)`).bind(wk).first()).n : undefined;
   return json({
@@ -202,8 +184,6 @@ async function social(p, env) {
   });
 }
 
-// Csak a becenév változtatható így. A statisztikát (XP, széria…) a szerver a saját állapotából írja,
-// a régi appok által küldött "stats" mezőt figyelmen kívül hagyjuk.
 async function putMe(p, req, env) {
   const b = await readJson(req);
   if (b.nick != null) {
@@ -212,8 +192,6 @@ async function putMe(p, req, env) {
   return json({ ok: true, grouped: false });
 }
 
-// ---------- A játék állapota: a szerver a döntő ----------
-// Tesztpanel: az üzemeltetőnek (ADMIN_IDS), illetve helyi teszteléskor (wrangler dev --var DEV_MODE:1) mindenkinek.
 const devAllowed = (env, p) => isAdmin(env, p.id) || env.DEV_MODE === "1";
 async function loadState(env, p) {
   const row = await env.DB.prepare("SELECT data, updated_at FROM progress WHERE player_id = ?").bind(p.id).first();
@@ -229,17 +207,13 @@ async function stateContext(env, p) {
   const follows = (await env.DB.prepare("SELECT followee FROM follows WHERE follower = ? LIMIT 300").bind(p.id).all()).results || [];
   let last = null;
   try { last = p.last_result ? JSON.parse(p.last_result) : null; } catch {}
-  // A tempóellenőrzés élesben mindig be van kapcsolva; csak a helyi böngészős tesztekhez kapcsolható ki (RELAXED_PACE).
   return { tier: p.league, last, follows: follows.map((f) => f.followee), dev: devAllowed(env, p), strict: env.RELAXED_PACE !== "1" };
 }
-// Egy művelet lefuttatása a szabályokkal, és a mentés optimista zárolással: ha közben egy másik kérés (pl. egy
-// másik eszköz) is írt, újraolvassuk az állapotot, és újra lefuttatjuk a műveletet.
 async function runState(env, p, type, payload) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const [{ state, ver }, ctx] = await Promise.all([loadState(env, p), stateContext(env, p)]);
     const before = JSON.stringify(state);
     let out, next, stats;
-    // A szabályok egy közös példányon futnak: a use() és az eredmény kiolvasása között nincs await.
     RULES.use(state);
     try {
       out = RULES.runAction(type, payload, ctx);
@@ -262,7 +236,6 @@ async function runState(env, p, type, payload) {
   }
   throw new HttpError(409, "Épp mentés folyik egy másik eszközödről. Próbáld újra!");
 }
-// A nyilvános profil (players) és a heti liga-XP (weekly) a szerver állapotából.
 async function syncPlayer(env, p, st) {
   const now = Date.now(), wk = weekKey(now);
   await env.DB.prepare("UPDATE players SET xp = ?, streak = ?, best_streak = ?, last_day = ?, lessons = ?, ach = ?, skin = ?, acc = ?, updated_at = ? WHERE id = ?")
@@ -283,7 +256,6 @@ async function act(p, req, env) {
   const type = typeof b.type === "string" ? b.type.slice(0, 20) : "";
   return stateReply(await runState(env, p, type, b));
 }
-// A régi appoknak (amíg egy nyitott lapon még a régi kód fut): a mentést nem vesszük át, a szerver állapotát küldjük vissza.
 async function legacyProgress(p, env, put) {
   const r = await runState(env, p, "tick", {});
   if (put) return json({ error: "A haladásodat mostantól a szerver menti.", conflict: true, data: r.state, updatedAt: r.state.updatedAt }, 409);
@@ -300,7 +272,6 @@ async function follow(p, req, env) {
     if (!target) throw new HttpError(404, "Nincs ilyen kódú játékos. Ellenőrizd a kódot!");
   } else if (b.id) {
     target = await env.DB.prepare("SELECT id, nick, class_id FROM players WHERE id = ?").bind(String(b.id)).first();
-    // Kód nélkül csak ligatársat (ezen a héten egy csoportban), osztálytársat, vagy azt követheted vissza, aki már követ téged.
     if (!target) throw new HttpError(404, "Nincs ilyen játékos.");
     const classmate = p.class_id && target.class_id === p.class_id;
     const followsMe = await env.DB.prepare("SELECT 1 AS x FROM follows WHERE follower = ? AND followee = ?").bind(target.id, p.id).first();
@@ -352,8 +323,6 @@ async function joinClass(p, req, env) {
   await handOver(p, env, c.id);
   return json({ ok: true, id: c.id, name: c.name });
 }
-// Ha valaki elhagy egy osztályt, amelyet ő hozott létre, a legrégebbi tag lesz a gazdája;
-// ha nem maradt tag, az osztály törlődik.
 async function handOver(p, env, keepId) {
   if (!p.class_id || p.class_id === keepId) return;
   const c = await env.DB.prepare("SELECT * FROM classes WHERE id = ?").bind(p.class_id).first();
@@ -389,7 +358,6 @@ async function report(p, req, env) {
 async function deleteAccount(p, env) {
   await handOver(p, env, null);
   await env.DB.batch([
-    // A még futó heti csoportjában felszabadul a helye.
     env.DB.prepare("UPDATE league_groups SET size = size - 1 WHERE done_at IS NULL AND size > 0 AND id IN (SELECT grp FROM weekly WHERE player_id = ? AND grp IS NOT NULL)").bind(p.id),
     env.DB.prepare("DELETE FROM follows WHERE follower = ?1 OR followee = ?1").bind(p.id),
     env.DB.prepare("DELETE FROM weekly WHERE player_id = ?").bind(p.id),
@@ -399,8 +367,6 @@ async function deleteAccount(p, env) {
   ]);
 }
 
-// ---------- Moderálás (csak az üzemeltetőnek) ----------
-// Gyanús jelek: a heti XP több, mint az összes; képtelen mennyiségű drágakő; sok XP egyetlen lecke nélkül.
 function suspicion(r) {
   const out = [];
   if ((r.wxp || 0) > r.xp) out.push("heti XP (" + r.wxp + ") több, mint az összes XP (" + r.xp + ")");
@@ -408,7 +374,6 @@ function suspicion(r) {
   if (r.xp >= 300 && !r.lessons) out.push(r.xp + " XP egyetlen lecke nélkül");
   return out;
 }
-// A széria, a leckék és az osztály azért is kell, hogy egy elveszett belépőkódnál ellenőrizni lehessen, tényleg az övé-e a fiók.
 function modRow(r) {
   return {
     id: r.id, nick: r.nick, code: r.code, xp: r.xp, weekXp: r.wxp || 0, joined: dayKey(r.created_at), seen: dayKey(r.updated_at),
@@ -417,12 +382,10 @@ function modRow(r) {
     flags: suspicion(r),
   };
 }
-// ?1: az aktuális hét kulcsa (a heti XP-hez).
 const MOD_COLS = `p.*, COUNT(r.id) AS cnt, SUM(r.reason = 'nick') AS nick_cnt, COUNT(DISTINCT r.reporter) AS reporters, MAX(r.created_at) AS last,
   (SELECT xp FROM weekly w WHERE w.player_id = p.id AND w.week_key = ?1) AS wxp,
   (SELECT json_extract(data, '$.gems') FROM progress pr WHERE pr.player_id = p.id) AS gems,
   (SELECT name FROM classes c WHERE c.id = p.class_id) AS cls`;
-// A jelentett és a gyanús játékosok (az utóbbiak közül a 14 napon belül aktívak), elöl a gyanúsak.
 async function adminReports(env) {
   const now = Date.now();
   const rows = (await env.DB.prepare(`SELECT ${MOD_COLS} FROM players p LEFT JOIN reports r ON r.target = p.id
@@ -440,8 +403,6 @@ async function adminFind(env, q) {
     WHERE p.id = ?2 OR p.code = ?2 OR p.nick LIKE ?3 ESCAPE '\\' GROUP BY p.id ORDER BY p.updated_at DESC LIMIT 30`).bind(weekKey(Date.now()), s.toUpperCase(), like).all()).results || [];
   return json({ players: rows.map(modRow) });
 }
-// Nullázás csalás után: a heti XP 0, a mentés a kezdőállapotra áll (új korszakkal). A fiók, a becenév és a
-// követések maradnak. A legutóbbi ligaeredményt már „látottnak” jelöljük, hogy a jutalmát ne kapja meg újra.
 async function resetPlayer(env, t) {
   const now = Date.now(), wk = weekKey(now);
   const s = RULES.fresh();
@@ -460,7 +421,6 @@ async function adminAct(p, req, env) {
   const t = await env.DB.prepare("SELECT * FROM players WHERE id = ?").bind(String(b.id || "")).first();
   if (!t) throw new HttpError(404, "Nincs ilyen játékos.");
   if (b.action === "rename") {
-    // Semleges, egyedi név a barátkóddal, hogy a ligában ne legyen sok egyforma.
     const nick = "Játékos " + t.code;
     await env.DB.batch([
       env.DB.prepare("UPDATE players SET nick = ? WHERE id = ?").bind(nick, t.id),
@@ -482,8 +442,6 @@ async function adminAct(p, req, env) {
     return json({ ok: true });
   }
   if (b.action === "newcode") {
-    // Elveszett belépőkód pótlása (e-mailes kérésre, ha az üzemeltető meggyőződött róla, hogy a fiók a kérőé).
-    // Új titkos rész készül, a régi kód azonnal megszűnik: minden eszközön, ahol vele léptek be, kijelentkezik.
     const secret = randomCode(16);
     await env.DB.prepare("UPDATE players SET secret_hash = ? WHERE id = ?").bind(await sha256(secret), t.id).run();
     console.log("Új belépőkód: " + t.id + " (kiadta: " + p.id + ")");
@@ -492,19 +450,15 @@ async function adminAct(p, req, env) {
   throw new HttpError(400, "Ismeretlen művelet.");
 }
 
-// ---------- Online liga: heti csoportok és zárás ----------
-// Ugyanez a szabály van az appban is (zones), a kettőnek egyeznie kell.
 function zones(size, league) {
   const up = league < LEAGUE_MAX ? (size >= 15 ? 5 : Math.min(3, Math.max(1, size - 1))) : 0;
   const down = league > 0 && size >= 8 ? (size >= 15 ? 5 : 3) : 0;
   return { up, down };
 }
-// Az első heti XP-vel a játékos a ligája legkorábbi, még nem teli csoportjába kerül.
 async function ensureGroup(env, playerId, wk) {
   const row = await env.DB.prepare("SELECT xp, grp FROM weekly WHERE player_id = ? AND week_key = ?").bind(playerId, wk).first();
   if (!row || row.xp <= 0) return false;
   if (row.grp) return true;
-  // Előbb lezárjuk a múlt heti csoportját, hogy már a frissített ligájába kerüljön.
   const prev = await env.DB.prepare("SELECT grp FROM weekly WHERE player_id = ? AND week_key = ? AND grp IS NOT NULL").bind(playerId, addDays(wk, -7)).first();
   if (prev) await closeGroup(env, prev.grp);
   const me = await env.DB.prepare("SELECT league FROM players WHERE id = ?").bind(playerId).first();
@@ -521,7 +475,6 @@ async function ensureGroup(env, playerId, wk) {
   }
   return false;
 }
-// Lezár egy véget ért heti csoportot: feljutás, kiesés, jutalom. Igaz, ha most zártuk le.
 async function closeGroup(env, gid) {
   const g = await env.DB.prepare("SELECT * FROM league_groups WHERE id = ?").bind(gid).first();
   if (!g || g.done_at || g.week_key >= weekKey(Date.now())) return false;
@@ -534,7 +487,6 @@ async function closeGroup(env, gid) {
     const rank = i + 1;
     const res = rank <= z.up ? "up" : z.down && rank > rows.length - z.down ? "down" : "stay";
     const to = Math.max(0, Math.min(LEAGUE_MAX, g.league + (res === "up" ? 1 : res === "down" ? -1 : 0)));
-    // Drágakő csak annak jár, aki legalább egy másik játékost megelőzött.
     const reward = rank < rows.length ? LEAGUE_REWARDS[rank - 1] || 0 : 0;
     const result = JSON.stringify({ week: g.week_key, rank, size: rows.length, res, from: g.league, to, reward });
     stmts.push(env.DB.prepare("UPDATE players SET league = ?, last_result = ? WHERE id = ?").bind(to, result, r.id));
@@ -543,7 +495,6 @@ async function closeGroup(env, gid) {
   return true;
 }
 
-// ---------- Óránkénti feladatok: ligazárás és takarítás ----------
 async function hourly(env) {
   const now = Date.now(), cur = weekKey(now);
   const open = (await env.DB.prepare("SELECT id FROM league_groups WHERE done_at IS NULL AND week_key < ? LIMIT 300").bind(cur).all()).results || [];
@@ -555,15 +506,13 @@ async function hourly(env) {
     env.DB.prepare("DELETE FROM rate WHERE reset_at < ?").bind(now),
     env.DB.prepare("DELETE FROM reports WHERE created_at < ?").bind(now - 90 * DAY),
   ]);
-  // 12 hónapja inaktív fiókok, és a 30 napja nem használt, XP nélküli (csak kipróbált) fiókok törlése.
   const stale = (await env.DB.prepare("SELECT * FROM players WHERE updated_at < ?1 OR (xp = 0 AND updated_at < ?2) LIMIT 50")
     .bind(now - 365 * DAY, now - 30 * DAY).all()).results || [];
   for (const p of stale) await deleteAccount(p, env);
 }
 
-// ---------- Útválasztás ----------
 async function api(req, env, url) {
-  const path = url.pathname.slice(4); // "/api" levágva
+  const path = url.pathname.slice(4);
   const method = req.method;
   if (method === "GET" && path === "/health") return json({ app: "kodkigyo", ok: true, captcha: captchaOn(env) ? env.TURNSTILE_SITEKEY : "" });
   if (method === "POST" && path === "/register") return register(req, env);
