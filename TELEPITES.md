@@ -80,10 +80,22 @@ A legegyszerűbb az appból: lépj be az üzemeltetői fiókkal (`ADMIN_IDS`), �
 - **Rendben van:** lezárod a jelentéseket.
 - **Nullázás:** csalásnál. A játékos XP-je és mentése a kezdőállapotra áll, a fiókja megmarad.
 - **Fiók törlése:** nem vonható vissza.
+- **Új belépőkód:** ha valaki elvesztette a belépőkódját (lásd lent).
 
 A listában a gyanús játékosok is megjelennek, például ha a heti XP-je több az összesnél, vagy képtelen mennyiségű drágaköve van. Mióta a gazdaság a szerveren van, ilyen csak a régi, átállás előtti adatoknál fordulhat elő.
 
 Becenévre vagy barátkódra kereshetsz is, például ha valaki e-mailben jelez egy játékost.
+
+### Elveszett belépőkód
+
+A fiókhoz nincs e-mail cím vagy jelszó, csak a 24 karakteres belépőkód. Az app ezért az első lecke után (és amíg a játékos nem jelzi, hogy elmentette, kétnaponta) megkéri, hogy mentse el: másolással, letöltéssel vagy a böngésző jelszókezelőjébe. Ha valaki mégis elveszíti, és írt a support@kodkigyo.hu-ra:
+
+1. Keresd meg a becenevére: **Profil › Teszt › Jelentések és keresés**. A találatnál látod a barátkódját, az XP-jét, a szériáját, a leckéi számát és az osztályát.
+2. Csak akkor adj új kódot, ha biztos vagy benne, hogy a fiók az övé. Tudjon olyat, amit más nem tudhat: a barátkódját, az osztálya nevét, nagyjából az XP-jét vagy a szériáját. Diáknál a legbiztosabb, ha a tanára is megerősíti.
+3. **Új belépőkód › Új kód kiadása.** A régi kód azonnal megszűnik, a játékos minden eszközén kijelentkezik, a haladása megmarad.
+4. A **Válaszlevél másolása** gombbal egy kész levelet kapsz a kóddal együtt, ezt küldd el neki. A kódot később nem tudod újra megnézni, csak újat adhatsz ki.
+
+Az adatkezelési tájékoztató szerint a lezárt ügyek leveleit legfeljebb egy évig őrizzük, ezért évente töröld a régieket a kodkigyosupport@gmail.com postafiókból.
 
 Parancssorból is megy. A jelentések listája:
 ```

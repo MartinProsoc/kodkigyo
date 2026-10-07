@@ -486,6 +486,16 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .follow-counts b{font-family:var(--f-display);font-weight:400;font-size:17px}
 .code-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface-2);border-radius:14px;padding:10px 12px;font-size:14px}
 .code-box code{font:600 18px/1 var(--f-mono);letter-spacing:.14em;background:none;padding:0;color:var(--ink)}
+.code-box code.login-code{font:600 19px/1.4 var(--f-mono);letter-spacing:.06em;overflow-wrap:anywhere}
+.code-actions{display:flex;flex-wrap:wrap;gap:8px}
+.code-warn{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;background:var(--sun-soft);border-color:color-mix(in srgb,var(--sun) 60%,transparent)}
+.code-warn>.ic{width:28px;height:28px;color:var(--sun-deep)}
+.code-warn b{display:block;font-size:15px}
+.code-warn p{margin-top:2px}
+@media (max-width:440px){.code-warn{grid-template-columns:auto minmax(0,1fr)}.code-warn .btn{grid-column:1/-1}}
+.login-form{display:flex;flex-direction:column;gap:10px}
+.lost-code a{color:var(--blue);font-weight:600;overflow-wrap:anywhere}
+.mod-facts{color:var(--ink-soft);font-weight:600;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .stat-tile{display:flex;align-items:center;gap:12px;padding:14px;border:2px solid var(--line);border-radius:18px;background:var(--surface)}
 .stat-tile .ic{width:30px;height:30px;color:var(--sc)}
@@ -905,7 +915,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   <symbol id="i-robot" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M11 2.5h2V5h3.5A3.5 3.5 0 0 1 20 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 15.5v-7A3.5 3.5 0 0 1 7.5 5H11zM8.5 10a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-1.3 8.5v7h2.6v-7zM12 6.2a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" d="M5 15.5h-.5A1.5 1.5 0 0 1 3 14V4.5A1.5 1.5 0 0 1 4.5 3H14a1.5 1.5 0 0 1 1.5 1.5V5"/></symbol>
-  <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3.5 6h9M19 6h1.5M3.5 12h3M13 12h7.5M3.5 18h11M20 18h.5"/></g><g fill="currentColor"><circle cx="16" cy="6" r="2.7"/><circle cx="9.7" cy="12" r="2.7"/><circle cx="17.3" cy="18" r="2.7"/></g></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v11M7 10l5 5 5-5M4.5 16.5v2.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M8.5 4a6.5 6.5 0 0 1 6.2 8.4l6.8 6.8V22h-3.5v-2h-2v-2h-2l-1.6-1.6A6.5 6.5 0 1 1 8.5 4zM7 8a1.7 1.7 0 1 0 0 3.4A1.7 1.7 0 0 0 7 8z"/></symbol>
+  <symbol id="i-gear"viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3.5 6h9M19 6h1.5M3.5 12h3M13 12h7.5M3.5 18h11M20 18h.5"/></g><g fill="currentColor"><circle cx="16" cy="6" r="2.7"/><circle cx="9.7" cy="12" r="2.7"/><circle cx="17.3" cy="18" r="2.7"/></g></symbol>
   <symbol id="i-wrench" viewBox="0 0 24 24"><path fill="currentColor" d="M20.7 6.3a5.5 5.5 0 0 1-7 6.7l-7.3 7.3a2.2 2.2 0 0 1-3.1-3.1l7.3-7.3a5.5 5.5 0 0 1 6.7-7l-3.2 3.2.6 2.8 2.8.6z"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path fill="currentColor" d="M5 2.5a1.2 1.2 0 0 1 1.2 1.2v17.1a1.2 1.2 0 1 1-2.4 0V3.7A1.2 1.2 0 0 1 5 2.5zM7.5 3.5h11.3c.8 0 1.2.9.7 1.5L17 8.5l2.5 3.5c.5.6.1 1.5-.7 1.5H7.5z"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="4.5" cy="6" r="2"/><circle cx="4.5" cy="12" r="2"/><circle cx="4.5" cy="18" r="2"/><rect x="8.5" y="4.6" width="13" height="2.8" rx="1.4"/><rect x="8.5" y="10.6" width="13" height="2.8" rx="1.4"/><rect x="8.5" y="16.6" width="9" height="2.8" rx="1.4"/></g></symbol>
@@ -1019,7 +1031,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     phone: "",      // telefonszám (elhagyható)
     registry: "",   // cég vagy egyéni vállalkozó esetén: cégjegyzék- vagy nyilvántartási szám, adószám
     host: "Cloudflare, Inc., 101 Townsend St., San Francisco, CA 94107, USA", // tárhelyszolgáltató
-    updated: "2026. október 5.",
+    updated: "2026. október 7.",
   };
 
   // ===================== Tunables =====================
@@ -1356,7 +1368,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   }
   function adoptState(remote) {
     // Másik fiók állapota jött: az eszközön tárolt értesítései és félbehagyott leckéje nem ehhez tartozik.
-    if ((remote.owner || "") !== local.owner) { local = { owner: remote.owner || "", notices: [], paused: null }; saveExtras(); }
+    if ((remote.owner || "") !== local.owner) { local = freshLocal(remote.owner); saveExtras(); }
     state = remote;
     saveLocal();
     applySkin();
@@ -1364,12 +1376,16 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 
   // Ami csak ezen az eszközön van: a még meg nem mutatott értesítések (befagyasztó, liga…) és a félbehagyott
   // lecke feladatsora (hogy ugyanazokkal a feladatokkal folytatódjon). A szerver a lecke állását tárolja (state.held).
+  // codeSaved: a játékos jelezte, hogy elmentette a belépőkódját (vagy kóddal lépett be, tehát megvan neki);
+  // codeAskedAt: mikor kértük utoljára, hogy mentse el.
   const LOCAL_KEY = "kodkigyo-local-v1";
-  let local = { owner: "", notices: [], paused: null };
+  const freshLocal = (owner) => ({ owner: owner || "", notices: [], paused: null, codeSaved: false, codeAskedAt: 0 });
+  let local = freshLocal();
   function loadExtras() {
     try {
       const o = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
-      if (o && typeof o === "object") local = { owner: str(o.owner, 12), notices: Array.isArray(o.notices) ? o.notices.slice(-20) : [], paused: o.paused && typeof o.paused === "object" ? o.paused : null };
+      if (o && typeof o === "object") local = { owner: str(o.owner, 12), notices: Array.isArray(o.notices) ? o.notices.slice(-20) : [], paused: o.paused && typeof o.paused === "object" ? o.paused : null,
+        codeSaved: o.codeSaved === true, codeAskedAt: Number(o.codeAskedAt) || 0 };
     } catch (e) {}
   }
   function saveExtras() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(local)); } catch (e) {} }
@@ -2656,8 +2672,36 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     try { localStorage.setItem(ACCOUNT_KEY, NET.token); } catch (e) {}
     NET.canWrite = true;
     await loadAccount();
+    markCodeSaved(); // kóddal lépett be, tehát megvan neki
   }
   function loginCode() { return NET.token ? NET.token.replace(".", "").match(/.{1,4}/g).join("-") : ""; }
+
+  // ---------- A belépőkód megőrzése ----------
+  // A fiókhoz nincs e-mail cím vagy jelszó: aki elveszíti a belépőkódját, és törlődnek a böngészője adatai, csak
+  // az üzemeltetőtől kaphat újat. Ezért az első lecke után (és amíg nem jelzi, hogy elmentette, pár naponta)
+  // megkérjük, hogy mentse el: másolással, letöltéssel vagy a böngésző jelszókezelőjébe.
+  function needCodeSave() { return NET.mode === "server" && !!NET.token && !local.codeSaved; }
+  function markCodeSaved() { if (!local.codeSaved) { local.codeSaved = true; saveExtras(); } }
+  // Szövegfájl a kóddal és a belépés módjával (a böngészőben készül, nem megy át a hálózaton).
+  function downloadCode() {
+    const text = ["Kódkígyó – belépőkód", "", "Becenév: " + myName(), "Barátkód: " + state.code, "Belépőkód: " + loginCode(), "",
+      "Belépés másik eszközön: nyisd meg a " + location.origin + " oldalt, és válaszd a „Van már fiókom: belépés kóddal” lehetőséget.",
+      "Vigyázz rá, és senkinek ne add meg: aki ismeri, be tud lépni a fiókodba!"].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/plain;charset=utf-8" }));
+    const a = el("a", { href: url, download: "kodkigyo-belepokod.txt", hidden: true });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+  // Chrome és Edge: a kód mentése a böngésző jelszókezelőjébe (felhasználónév: becenév és barátkód). Ha a játékos
+  // ugyanabba a Google- vagy Microsoft-fiókba lép be másik gépen, ott a belépésnél a böngésző felkínálja.
+  const canStoreCred = () => !!(window.PasswordCredential && navigator.credentials && navigator.credentials.store);
+  async function storeCredential() {
+    if (!canStoreCred() || !NET.token) return false;
+    try { await navigator.credentials.store(new window.PasswordCredential({ id: myName() + " · " + state.code, name: myName(), password: loginCode() })); return true; }
+    catch (e) { return false; }
+  }
   function forgetAccount() {
     clearInterval(NET.pollTimer); clearTimeout(NET.pubTimer); clearTimeout(NET.pushTimer);
     Object.assign(NET, { token: null, uid: null, me: null, cls: null, league: null, players: new Map(), followersList: [], ready: false, lastPub: "", pendingRemote: null });
@@ -2717,7 +2761,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       forgetAccount();
       // A törölt fiók haladása erről az eszközről is törlődik, és egy új fiókba sem kerül át.
       state = fresh();
-      local = { owner: "", notices: [], paused: null };
+      local = freshLocal();
       saveExtras();
       prefs.chapter = null;
       saveLocal();
@@ -3692,14 +3736,37 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"));
   }
   function loginSheet() {
-    const inp = el("input", { class: "search code-in", id: "loginCode", maxlength: "29", placeholder: "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX", autocomplete: "off", spellcheck: "false", "aria-label": "Belépőkód", style: "letter-spacing:.08em;font-size:17px" });
+    // Felhasználónév- és jelszómezős űrlap, hogy a böngésző jelszókezelője kitölthesse, és felajánlhassa a mentést.
+    const user = el("input", { type: "text", name: "username", autocomplete: "username", tabindex: "-1", "aria-hidden": "true", class: "sr-only" });
+    const inp = el("input", { class: "search code-in", id: "loginCode", type: "password", name: "password", maxlength: "29", placeholder: "XXXX-XXXX-XXXX-XXXX-XXXX-XXXX",
+      autocomplete: "current-password", autocapitalize: "characters", spellcheck: "false", "aria-label": "Belépőkód", style: "letter-spacing:.08em;font-size:17px" });
+    const eye = el("button", { class: "btn ghost sm", type: "button", "aria-pressed": "false", "aria-controls": "loginCode" }, "Mutasd");
+    eye.addEventListener("click", () => {
+      const show = inp.type === "password";
+      inp.type = show ? "text" : "password";
+      eye.textContent = show ? "Elrejtés" : "Mutasd";
+      eye.setAttribute("aria-pressed", String(show));
+      inp.focus();
+    });
     const msg = el("p", { class: "note", "aria-live": "polite" });
-    const btn = el("button", { class: "btn blue", type: "button" }, "Belépés");
-    btn.addEventListener("click", () => busy(btn, msg, async () => { await loginWithCode(inp.value); closeSheet(); render(); sfx("coin"); toast("Beléptél, " + myName() + "!"); }));
-    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); btn.click(); } });
+    const btn = el("button", { class: "btn blue", type: "submit" }, "Belépés");
+    const form = el("form", { class: "login-form", novalidate: true }, user, el("div", { class: "row" }, inp, eye), msg, btn);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (btn.disabled) return;
+      busy(btn, msg, async () => { await loginWithCode(inp.value); closeSheet(); render(); sfx("coin"); toast("Beléptél, " + myName() + "!"); storeCredential(); });
+    });
     openSheet(null, el("span", { class: "eyebrow" }, "Fiók"), el("h3", { id: "sheetTitle" }, "Belépés kóddal"),
-      el("p", { class: "meta" }, "A belépőkódodat a másik eszközödön a Profil › Beállítások › Belépőkód alatt találod. Ha itt is van haladásod, a frissebbik marad meg."),
-      inp, msg, btn);
+      el("p", { class: "meta" }, "A belépőkódodat a másik eszközödön a Profil › Beállítások › Belépőkód alatt találod, vagy abban a fájlban, amelyet letöltöttél."),
+      form,
+      el("p", { class: "note lost-code" }, el("b", null, "Elvesztetted a kódodat? "), "Írj a ", el("a", { href: "mailto:" + LEGAL.email }, LEGAL.email),
+        " címre. Írd meg a beceneved, az osztályodat, és amit a fiókodról tudsz (például a barátkódodat, az XP-det vagy a szériádat). Ha kiderül, hogy a fiók a tiéd, új kódot kapsz, a régi pedig megszűnik."));
+    // Chrome és Edge: ha a böngészőben már el van mentve egy belépőkód, felkínálja, és egy koppintással belép vele.
+    if (canStoreCred() && navigator.credentials.get) {
+      navigator.credentials.get({ password: true, mediation: "optional" }).then((c) => {
+        if (c && c.password && !inp.value && form.isConnected) { inp.value = c.password; form.requestSubmit(); }
+      }, () => {});
+    }
   }
   function classCard() {
     const card = el("section", { class: "card", id: "classCard" });
@@ -3762,20 +3829,53 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("p", { class: "meta" }, "A diák kikerül az osztályligából. A kóddal később újra csatlakozhat."),
       el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: closeSheet }, "Mégsem"), btn));
   }
-  function showLoginCode() {
+  // Gombok a belépőkód elmentéséhez: másolás, letöltés szövegfájlba, és (Chrome, Edge) mentés a böngészőbe.
+  // A letöltés elmentésnek számít; a másolásról és a böngészőről nem tudjuk, megtörtént-e, ott az Elmentettem gomb jelzi.
+  function codeActions(code, codeEl) {
+    return el("div", { class: "code-actions" },
+      el("button", { class: "btn ghost sm", type: "button", onclick: () => copyText(code, codeEl) }, icon("copy"), "Másolás"),
+      el("button", { class: "btn ghost sm", type: "button", onclick: () => { downloadCode(); markCodeSaved(); toast("Letöltve: kodkigyo-belepokod.txt"); } }, icon("download"), "Letöltés"),
+      canStoreCred() ? el("button", { class: "btn ghost sm", type: "button", onclick: async () => { if (await storeCredential()) toast("Ha a böngésző felajánlja, kattints a Mentés gombra."); } },
+        icon("key"), "Mentés a böngészőbe") : null);
+  }
+  // A belépőkód megmutatása és elmentése. opts.ask: magától jött az első lecke után („Később” gombbal);
+  // opts.back: a Beállításokból nyitották, oda tér vissza.
+  function codeSheet(opts) {
+    opts = opts || {};
     const code = loginCode();
-    const codeEl = el("code", { style: "font:600 19px/1.4 var(--f-mono);letter-spacing:.06em;overflow-wrap:anywhere" }, code);
-    openSheet(null, el("span", { class: "eyebrow" }, "Fiók"), el("h3", { id: "sheetTitle" }, "A belépőkódod"),
+    const codeEl = el("code", { class: "login-code" }, code);
+    const done = () => { if (opts.back) opts.back(); else closeSheet(); };
+    openSheet(null,
+      opts.ask ? tekla("happy") : null,
+      el("span", { class: "eyebrow" }, "Fiók"),
+      el("h3", { id: "sheetTitle" }, opts.ask ? "Mentsd el a belépőkódodat!" : "A belépőkódod"),
+      el("p", { class: "meta" }, "Ezzel a kóddal léphetsz be másik eszközön, például otthon és az iskolában. Ha elveszíted, és törlődnek a böngésződ adatai, a haladásod is elveszhet."),
       el("div", { class: "code-box" }, codeEl),
-      el("button", { class: "btn ghost", type: "button", onclick: () => copyText(code, codeEl) }, icon("copy"), "Másolás"),
-      el("p", { class: "meta" }, "Ezzel a kóddal léphetsz be másik eszközön. Írd fel, vagy mentsd el biztonságos helyre. Aki ismeri, az be tud lépni a fiókodba, ezért senkinek ne add meg!"),
-      el("button", { class: "btn wide", type: "button", onclick: settingsSheet }, "Vissza"));
+      codeActions(code, codeEl),
+      el("p", { class: "note" }, "Írd fel egy füzetbe, töltsd le, vagy mentsd a böngésződbe. Senkinek ne add meg: aki ismeri, be tud lépni a fiókodba!"),
+      local.codeSaved
+        ? el("button", { class: "btn wide", type: "button", onclick: done }, opts.back ? "Vissza" : "Kész")
+        : el("div", { class: "row" },
+          el("button", { class: "btn ghost", type: "button", onclick: done }, opts.back ? "Vissza" : "Később"),
+          el("button", { class: "btn", type: "button", onclick: () => { markCodeSaved(); sfx("coin"); toast("Szuper! Így bármikor visszaléphetsz."); done(); } }, icon("check"), "Elmentettem")));
+    if (opts.ask) sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
+  }
+  function showLoginCode() { codeSheet({ back: settingsSheet }); }
+  // A Profil tetején, amíg a játékos nem jelezte, hogy elmentette a kódját.
+  function codeWarnCard() {
+    return el("section", { class: "card code-warn" }, icon("key"),
+      el("div", null, el("b", null, "Mentsd el a belépőkódodat!"),
+        el("p", { class: "small muted" }, "Enélkül nem tudsz belépni másik eszközön, és ha törlődnek a böngésződ adatai, a haladásod is elveszhet.")),
+      el("button", { class: "btn sm", type: "button", onclick: () => codeSheet() }, "Mentés"));
   }
   function confirmLogout() {
     const code = loginCode();
+    const codeEl = el("code", { class: "login-code" }, code);
     openSheet(null, el("h3", { id: "sheetTitle" }, "Kijelentkezel ezen az eszközön?"),
-      el("p", { class: "meta" }, "A haladásodat a fiókod őrzi. Visszalépni csak a belépőkóddal tudsz, ezért előbb mentsd el:"),
-      el("div", { class: "code-box" }, el("code", { style: "font:600 16px/1.4 var(--f-mono);overflow-wrap:anywhere" }, code)),
+      el("p", { class: "meta" }, local.codeSaved ? "A haladásodat a fiókod őrzi. Visszalépni a belépőkóddal tudsz:"
+        : "A haladásodat a fiókod őrzi, de visszalépni csak a belépőkóddal tudsz, és még nem jelezted, hogy elmentetted. Előbb mentsd el:"),
+      el("div", { class: "code-box" }, codeEl),
+      codeActions(code, codeEl),
       el("div", { class: "row" },
         el("button", { class: "btn ghost", type: "button", onclick: settingsSheet }, "Mégsem"),
         el("button", { class: "btn bad", type: "button", onclick: () => {
@@ -3861,7 +3961,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           devMode() ? el("button", { class: "btn ghost sm", type: "button", id: "devBtn", onclick: devPanel }, icon("bolt"), "Teszt",
             modOn() && NET.me.reported ? el("span", { class: "dev-count", title: "Moderálásra vár" }, String(NET.me.reported)) : null) : null,
           el("button", { class: "btn ghost sm", type: "button", onclick: settingsSheet }, icon("gear"), "Beállítások"))),
-      head);
+      head,
+      needCodeSave() ? codeWarnCard() : null);
     if (online()) {
       const codeEl = el("code", null, state.code);
       root.append(el("div", { class: "code-box" }, el("span", { class: "muted" }, "Barátkódod:"), codeEl,
@@ -3882,9 +3983,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     root.append(legalLinks());
     return root;
   }
-  function copyText(text, node) {
+  // label: mit írjon a visszajelzés (hosszú szövegnél nem magát a szöveget).
+  function copyText(text, node, label) {
     try {
-      navigator.clipboard.writeText(text).then(() => toast("Kimásolva: " + text), () => selectNode(node));
+      navigator.clipboard.writeText(text).then(() => toast("Kimásolva: " + (label || text)), () => selectNode(node));
     } catch (e) { selectNode(node); }
   }
   function selectNode(node) {
@@ -3950,13 +4052,16 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("Az IP-címedet nem tároljuk. A regisztrációk számának korlátozásához legfeljebb egy óráig egy belőle képzett, visszafejthetetlen kódot (hash) őrzünk."),
         p("Hogy senki ne tudjon tömegesen, programmal fiókokat létrehozni, a fiók létrehozásakor a Cloudflare Turnstile robotszűrője ellenőrzi, hogy ember használja-e a böngészőt. Ehhez a Cloudflare a challenges.cloudflare.com címről betölt egy ellenőrzőt, amely az IP-címedet, a böngésződ technikai adatait és a használat jellemzőit vizsgálja. Az eredményt és az IP-címedet a szerverünk a Cloudflare-nek ellenőrzésre továbbítja. A Cloudflare ezeket az adatokat csak a robotszűréshez használja, hirdetéshez vagy követéshez nem, a saját ", ext("https://www.cloudflare.com/turnstile-privacy-policy/", "Turnstile adatvédelmi tájékoztatója"), " szerint. Az ellenőrzés általában láthatatlan, néha egy jelölőnégyzetet kell bepipálnod."),
         p("A fiókot addig őrizzük, amíg nem törlöd. Ha 12 hónapig nem használod, automatikusan töröljük. Ha egy fiókkal egyetlen XP-t sem szereztél, és 30 napig nem nyitottad meg vele a Kódkígyót, azt is töröljük, hogy a csak kipróbált fiókok ne maradjanak meg. A heti XP-adatokat 8 hétig, a jelentéseket 90 napig őrizzük. A Cloudflare adatfeldolgozóként, a szerződési feltételei szerint kezeli az adatokat."),
+        el("h3", null, "Ha írsz nekünk"),
+        p("Ha e-mailben írsz nekünk, például mert elvesztetted a belépőkódodat, az e-mail címedet és a leveledet csak a válaszhoz és a kérésed intézéséhez használjuk. A ", contact(),
+          " címre érkező leveleket a Cloudflare egy Gmail-postafiókba (Google) továbbítja, ott tároljuk őket, a lezárt ügyekét legfeljebb egy évig. Elveszett belépőkódnál a leveledben írtakat összevetjük a fiókod adataival (becenév, barátkód, osztály, XP, széria), és csak akkor adunk új kódot, ha ezek alapján biztos, hogy a fiók a tiéd. A régi kód ilyenkor megszűnik."),
         el("h3", null, "Ha a Kódkígyót a claude.ai-on használod"),
         p("A barátok és a ranglista miatt az online módban adatokat tárolunk az Anthropic (claude.ai) artifact-tárhelyén:"),
         ul("a haladásod mentését, amelyet csak te látsz;",
           "a nyilvános játékprofilodat, amelyet a Kódkígyó többi felhasználója is lát: összes és heti XP, széria, liga, a teljesített leckék és eredmények száma, a barátkódod, kiket követsz, mikor csatlakoztál, valamint Tekla kinézete és kiegészítői."),
         p("A neved és a profilképed a claude.ai-fiókodból jelenik meg a többieknek, ezeket a Kódkígyó nem tárolja. A claude.ai használatára az Anthropic feltételei és ", ext("https://www.anthropic.com/legal/privacy", "adatvédelmi tájékoztatója"), " vonatkozik."),
         el("h3", null, "Cél és jogalap"),
-        p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont). A regisztrációs korlát és a robotszűrés célja a szolgáltatás és a felhasználók védelme a visszaélésekkel szemben. Ennek jogalapja a jogos érdekünk (GDPR 6. cikk (1) bekezdés f) pont)."),
+        p("Az online adatkezelés célja a játék működtetése: a haladás mentése és szinkronizálása az eszközeid között, az online liga, a barátok és az osztályrangsor. Jogalapja az általad igénybe vett szolgáltatás nyújtása (GDPR 6. cikk (1) bekezdés b) pont). A regisztrációs korlát és a robotszűrés célja a szolgáltatás és a felhasználók védelme a visszaélésekkel szemben, a leveleid kezeléséé pedig, hogy válaszolni tudjunk, és szükség esetén visszaadhassuk a fiókodat. Ezek jogalapja a jogos érdekünk (GDPR 6. cikk (1) bekezdés f) pont)."),
         el("h3", null, "A jogaid"),
         p("Kérheted, hogy hozzáférj az adataidhoz, helyesbítsük, töröljük vagy korlátozzuk a kezelésüket, és tiltakozhatsz a kezelésük ellen. A haladásodat a Profil › Beállítások › Haladás törlése gombbal törölheted. A fiókodat a Fiókom törlése, a claude.ai-os online adataidat az Online adataim törlése gombbal magad is törölheted. Kérdés esetén írj ide: ", contact(), "."),
         p("Panasszal a Nemzeti Adatvédelmi és Információszabadság Hatósághoz fordulhatsz (1055 Budapest, Falk Miksa utca 9–11., ", ext("https://naih.hu", "naih.hu"), "), illetve bírósághoz."),
@@ -3968,7 +4073,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           el("thead", null, el("tr", null, el("th", null, "Név"), el("th", null, "Mit tárol"), el("th", null, "Meddig"))),
           el("tbody", null,
             el("tr", null, el("td", null, el("code", null, STORE_KEY)), el("td", null, "a haladásod másolatát (a kodkigyo.hu-n a szerveré a mérvadó)"), el("td", null, "amíg nem törlöd")),
-            el("tr", null, el("td", null, el("code", null, LOCAL_KEY)), el("td", null, "a még meg nem mutatott értesítéseket és egy félbehagyott lecke feladatsorát"), el("td", null, "amíg meg nem jelennek, illetve a lecke végéig")),
+            el("tr", null, el("td", null, el("code", null, LOCAL_KEY)), el("td", null, "a még meg nem mutatott értesítéseket, egy félbehagyott lecke feladatsorát, és hogy elmentetted-e a belépőkódodat"), el("td", null, "amíg meg nem jelennek, a lecke végéig, illetve amíg ezen az eszközön használod a fiókodat")),
             el("tr", null, el("td", null, el("code", null, PREF_KEY)), el("td", null, "a beállításaidat: hang, téma, megnyitott fül, becenév"), el("td", null, "amíg nem törlöd")),
             el("tr", null, el("td", null, el("code", null, ACCOUNT_KEY)), el("td", null, "a fiókod belépőkulcsát, csak ha létrehoztál fiókot"), el("td", null, "amíg ki nem jelentkezel, vagy nem törlöd a fiókot"))))),
         p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével."),
@@ -3980,7 +4085,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           "A kodkigyo.hu-n a haladásodat és a jutalmaidat a szerver számolja és menti, ezért a használatához internet kell. A közös online ligában valódi játékosokkal versenyzel. Ha a Kódkígyót fájlként nyitod meg, a ligában kitalált nevű gépi ellenfelek vannak, nem valódi emberek.",
           "Tilos a játék szabályait megkerülni, például a mentést vagy a kéréseket átírni, programmal leckéket teljesíteni. Az ilyen fiók haladását az üzemeltető nullázhatja, vagy a fiókot törölheti.",
           "A ligacsoportod tagjai, a barátaid és az osztálytársaid láthatják a becenevedet és a játékstatisztikáidat. A becenév nem lehet sértő vagy megtévesztő, és ne használd a Kódkígyót mások zaklatására. A szabályokat sértő fiókot az üzemeltető törölheti, az osztály létrehozója pedig eltávolíthat tagot az osztályból.",
-          "A belépőkódodra te vigyázol. Aki ismeri, be tud lépni a fiókodba, ezért senkinek ne add meg.",
+          "A belépőkódodra te vigyázol. Aki ismeri, be tud lépni a fiókodba, ezért senkinek ne add meg. Ha elveszíted, írj nekünk: ha meg tudjuk állapítani, hogy a fiók a tiéd, új kódot kapsz, a régi pedig megszűnik. Ha ez nem lehetséges, a fiókot nem tudjuk visszaadni.",
           "Az alkalmazást jelenlegi állapotában biztosítjuk. A jogszabályok által megengedett mértékben nem vállalunk felelősséget a használatából eredő károkért.",
           "A feltételek változhatnak, a változásokat ezen az oldalon tesszük közzé. A feltételekre a magyar jog irányadó.")),
       sec("jogok", "Szerzői jogok és védjegyek",
@@ -4218,7 +4323,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         settingsSheet(); render();
       })),
       nickBlock,
-      server ? row("Belépőkód", "Ezzel léphetsz be másik eszközön.", el("button", { class: "btn ghost sm", type: "button", onclick: showLoginCode }, "Mutasd")) : null,
+      server ? row("Belépőkód", local.codeSaved ? "Ezzel léphetsz be másik eszközön." : "Még nem mentetted el! Ezzel léphetsz be másik eszközön.",
+        el("button", { class: "btn ghost sm", type: "button", onclick: showLoginCode }, "Mutasd")) : null,
       server ? row("Kijelentkezés", "Ezen az eszközön. A haladásod itt marad.", el("button", { class: "btn ghost sm", type: "button", onclick: confirmLogout }, "Kijelentkezés")) : null,
       row("Haladás törlése", NET.mode === "server" && NET.token ? "Minden XP, széria és jutalom elvész, a fiókodban és minden eszközödön." : "Minden XP, széria és jutalom elvész ezen az eszközön.", el("button", { class: "btn bad sm", type: "button", onclick: confirmReset }, "Törlés")),
       server ? row("Fiókom törlése", "A becenév, a statisztikák, a követések és az online mentés.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés"))
@@ -4355,14 +4461,46 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const flags = p.flags || [];
     return el("div", { class: "mod-row" },
       el("div", { class: "mod-who" }, el("b", null, p.nick),
-        el("small", null, [p.code, fmtNum(p.xp) + " XP", fmtNum(p.weekXp || 0) + " XP a héten", "csatlakozott " + p.joined, "utoljára aktív " + p.seen].join(" · ")),
+        el("small", null, modFacts(p)),
         flags.map((f) => el("small", { class: "mod-rep" }, "Gyanús: " + f)),
         el("small", { class: p.reports ? "mod-rep" : null }, rep)),
       el("div", { class: "dev-row" },
         el("button", { class: "btn ghost sm", type: "button", onclick: act("rename", "Átnevezve: Játékos " + p.code) }, "Átnevezés"),
         p.reports ? el("button", { class: "btn ghost sm", type: "button", onclick: act("dismiss", "A jelentéseket lezártad.") }, "Rendben van") : null,
         p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modConfirm(p, query, "reset") }, "Nullázás") : null,
-        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modConfirm(p, query, "delete") }, "Fiók törlése") : null));
+        p.id !== NET.uid ? el("button", { class: "btn ghost sm mod-del", type: "button", onclick: () => modConfirm(p, query, "delete") }, "Fiók törlése") : null,
+        p.id !== NET.uid ? el("button", { class: "btn ghost sm", type: "button", onclick: () => modNewCode(p, query) }, icon("key"), "Új belépőkód") : null));
+  }
+  // Amit egy játékosról tudunk (a jelentésekhez és ahhoz, hogy egy elveszett kódnál ellenőrizni lehessen, az övé-e a fiók).
+  function modFacts(p) {
+    return [p.code, fmtNum(p.xp) + " XP", fmtNum(p.weekXp || 0) + " XP a héten", "széria " + (p.streak || 0) + " (legjobb " + (p.bestStreak || 0) + ")",
+      (p.lessons || 0) + " lecke", p.cls ? "osztály: " + p.cls : null, "csatlakozott " + p.joined, "utoljára aktív " + p.seen].filter(Boolean).join(" · ");
+  }
+  // Elveszett belépőkód pótlása: új kódot ad ki, a régi azonnal megszűnik. A haladás megmarad.
+  function modNewCode(p, query) {
+    const btn = el("button", { class: "btn", type: "button" }, icon("key"), "Új kód kiadása");
+    btn.addEventListener("click", () => busy(btn, null, async () => {
+      const r = await api("POST", "admin/player", { id: p.id, action: "newcode" });
+      const code = String(r.token || "").replace(".", "").match(/.{1,4}/g).join("-");
+      const codeEl = el("code", { class: "login-code" }, code);
+      const letter = "Szia!\n\nAz új Kódkígyó-belépőkódod: " + code + "\n\nBelépés: nyisd meg a " + location.origin + " oldalt, és válaszd a „Van már fiókom: belépés kóddal” lehetőséget. " +
+        "A régi kódod már nem működik. Vigyázz az új kódra, és senkinek ne add meg: aki ismeri, be tud lépni a fiókodba!\n\nÜdv:\nKódkígyó";
+      sfx("coin");
+      openSheet(null, el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
+        el("h3", { id: "sheetTitle" }, "„" + p.nick + "” új belépőkódja"),
+        el("div", { class: "code-box" }, codeEl),
+        el("div", { class: "code-actions" },
+          el("button", { class: "btn ghost sm", type: "button", onclick: () => copyText(code, codeEl) }, icon("copy"), "A kód másolása"),
+          el("button", { class: "btn ghost sm", type: "button", onclick: () => copyText(letter, codeEl, "a válaszlevél") }, icon("copy"), "Válaszlevél másolása")),
+        el("p", { class: "meta" }, "Küldd el neki válaszlevélben. A régi kódja már nem működik, és minden eszközén kijelentkezett. Ezt a kódot később nem tudod újra megnézni, csak újat adhatsz ki."),
+        el("button", { class: "btn wide", type: "button", onclick: () => modPanel(query) }, "Vissza a listához"));
+    }));
+    openSheet(null, el("h3", { id: "sheetTitle" }, "Új belépőkódot adsz „" + p.nick + "” fiókjához?"),
+      el("p", { class: "meta" }, "Akkor használd, ha valaki e-mailben jelzi, hogy elvesztette a kódját. Előbb győződj meg róla, hogy tényleg az övé a fiók: egyezzen a becenév, " +
+        "és tudjon olyat, amit más nem tudhat (a barátkódját, az osztálya nevét, nagyjából az XP-jét vagy a szériáját). Diáknál a legbiztosabb, ha a tanára is megerősíti."),
+      el("p", { class: "mod-facts small" }, modFacts(p)),
+      el("p", { class: "meta" }, "A régi kód azonnal megszűnik, és a játékos minden eszközén kijelentkezik. A haladása megmarad."),
+      el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => modPanel(query) }, "Mégsem"), btn));
   }
   function modConfirm(p, query, action) {
     const del = action === "delete";
@@ -4410,6 +4548,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
           el("button", { class: "btn ghost", type: "button", onclick: closeSheet }, "Később"),
           el("button", { class: "btn", type: "button", style: "background:var(--uc);box-shadow:0 4px 0 var(--ucd)", onclick: () => startSession({ mode: p.mode, i: p.i }) }, "Folytatás")));
       sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
+    } else if (n.type === "savecode") {
+      if (!needCodeSave()) { showNotices(); return; }
+      codeSheet({ ask: true });
     } else if (n.type === "league") {
       const L = LEAGUES[n.to];
       if (n.res === "up") { sfx("win"); setTimeout(() => fx.confetti(), 200); }
@@ -5191,6 +5332,12 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     render();
     window.scrollTo(0, 0);
     if (homeFx) playHomeFx(homeFx);
+    // Egy befejezett lecke után megkérjük, hogy mentse el a belépőkódját (amíg nem jelzi, hogy megvan, 2 naponta).
+    if (homeFx && needCodeSave() && Date.now() - local.codeAskedAt > 2 * DAY) {
+      local.codeAskedAt = Date.now();
+      local.notices.push({ type: "savecode" });
+      saveExtras();
+    }
     setTimeout(showNotices, 400);
   }
   // Lecke után: az XP felpörög, és az újonnan megnyílt állomás lakatja lepattan.

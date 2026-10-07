@@ -109,7 +109,7 @@ async function authenticate(req, env) {
 }
 
 // Az üzemeltető fiókja(i) (wrangler.jsonc: vars.ADMIN_IDS). Nekik az app tesztpanelt mutat, és csak ők
-// használhatják a moderálás végpontjait (/api/admin/...): jelentések, keresés, átnevezés, törlés.
+// használhatják a moderálás végpontjait (/api/admin/...): jelentések, keresés, átnevezés, nullázás, törlés, új belépőkód.
 const isAdmin = (env, id) => String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(id);
 
 // Nyilvános profil: ennyit lát egy játékosról a barátja vagy az osztálytársa.
@@ -408,9 +408,11 @@ function suspicion(r) {
   if (r.xp >= 300 && !r.lessons) out.push(r.xp + " XP egyetlen lecke nélkül");
   return out;
 }
+// A széria, a leckék és az osztály azért is kell, hogy egy elveszett belépőkódnál ellenőrizni lehessen, tényleg az övé-e a fiók.
 function modRow(r) {
   return {
     id: r.id, nick: r.nick, code: r.code, xp: r.xp, weekXp: r.wxp || 0, joined: dayKey(r.created_at), seen: dayKey(r.updated_at),
+    streak: r.streak || 0, bestStreak: r.best_streak || 0, lastDay: r.last_day || "", lessons: r.lessons || 0, cls: r.cls || "",
     reports: r.cnt || 0, nickReports: r.nick_cnt || 0, reporters: r.reporters || 0, last: r.last ? dayKey(r.last) : "",
     flags: suspicion(r),
   };
@@ -418,7 +420,8 @@ function modRow(r) {
 // ?1: az aktuális hét kulcsa (a heti XP-hez).
 const MOD_COLS = `p.*, COUNT(r.id) AS cnt, SUM(r.reason = 'nick') AS nick_cnt, COUNT(DISTINCT r.reporter) AS reporters, MAX(r.created_at) AS last,
   (SELECT xp FROM weekly w WHERE w.player_id = p.id AND w.week_key = ?1) AS wxp,
-  (SELECT json_extract(data, '$.gems') FROM progress pr WHERE pr.player_id = p.id) AS gems`;
+  (SELECT json_extract(data, '$.gems') FROM progress pr WHERE pr.player_id = p.id) AS gems,
+  (SELECT name FROM classes c WHERE c.id = p.class_id) AS cls`;
 // A jelentett és a gyanús játékosok (az utóbbiak közül a 14 napon belül aktívak), elöl a gyanúsak.
 async function adminReports(env) {
   const now = Date.now();
@@ -477,6 +480,14 @@ async function adminAct(p, req, env) {
     if (t.id === p.id) throw new HttpError(400, "A saját fiókodat a Beállításokban törölheted.");
     await deleteAccount(t, env);
     return json({ ok: true });
+  }
+  if (b.action === "newcode") {
+    // Elveszett belépőkód pótlása (e-mailes kérésre, ha az üzemeltető meggyőződött róla, hogy a fiók a kérőé).
+    // Új titkos rész készül, a régi kód azonnal megszűnik: minden eszközön, ahol vele léptek be, kijelentkezik.
+    const secret = randomCode(16);
+    await env.DB.prepare("UPDATE players SET secret_hash = ? WHERE id = ?").bind(await sha256(secret), t.id).run();
+    console.log("Új belépőkód: " + t.id + " (kiadta: " + p.id + ")");
+    return json({ ok: true, token: t.id + "." + secret });
   }
   throw new HttpError(400, "Ismeretlen művelet.");
 }
