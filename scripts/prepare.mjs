@@ -5,9 +5,12 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 mkdirSync("public", { recursive: true });
 copyFileSync("index.html", "public/index.html");
-// Link-előnézet (Messenger, Discord, WhatsApp…) és az iPhone kezdőképernyő-ikonja.
+// Link-előnézet (Messenger, Discord, WhatsApp…), az iPhone kezdőképernyő-ikonja, és a böngészőfül, illetve a
+// Google-találatok ikonja (ezt a Google csak külön fájlként tudja letölteni, az oldalba ágyazva nem).
 copyFileSync("og.jpg", "public/og.jpg");
 copyFileSync("apple-touch-icon.png", "public/apple-touch-icon.png");
+copyFileSync("favicon.ico", "public/favicon.ico");
+copyFileSync("favicon.svg", "public/favicon.svg");
 // Egyetlen külső forrás a Cloudflare Turnstile robotszűrője (fiók létrehozásakor); ehhez kell a
 // challenges.cloudflare.com, és hogy a böngésző elküldje neki az oldal címét (strict-origin).
 const TS = "https://challenges.cloudflare.com";

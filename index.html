@@ -17,7 +17,8 @@
 <meta property="og:image:alt" content="Tekla, a zöld kígyó, mellette a felirat: Kódkígyó – Tanulj Pythont játékosan, magyarul!">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='28 6 60 60'%3E%3Cellipse cx='58' cy='37' rx='28' ry='24' fill='%231C8A5D'/%3E%3Cellipse cx='58' cy='36' rx='27' ry='22.5' fill='%232FB37E'/%3E%3Cellipse cx='58' cy='47' rx='17' ry='9.5' fill='%23F6D66B'/%3E%3Ccircle cx='46.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='48' cy='32' r='4.8' fill='%2311241E'/%3E%3Ccircle cx='69.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='71' cy='32' r='4.8' fill='%2311241E'/%3E%3Cpath d='M52 46.5q6 5 12 0' fill='none' stroke='%2311241E' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
 /* Layout: nav rail left · learning path center · stats rail right. Phones: top stat bar + bottom tab bar.
    Identity: tactile 3D game UI, Python blue + yellow accents on leaf-tinted neutrals; the path is Tekla's own body. */
@@ -102,6 +103,17 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 .course{display:flex;align-items:center;gap:8px;margin-right:auto;min-width:0;background:none;border:0;padding:4px;border-radius:12px;cursor:pointer}
 .course .tekla{width:38px;height:38px}
 .course b{font:400 22px/1 var(--f-display);color:var(--brand);white-space:nowrap}
+/* Alpha jelzés: a játék még fejlesztés alatt van. */
+.alpha{display:inline-block;font:700 10px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;padding:4px 7px 3px;border-radius:99px;background:var(--sun-soft);color:var(--sun-deep);border:1.5px solid color-mix(in srgb,var(--sun) 60%,transparent);vertical-align:middle;white-space:nowrap}
+.logo b .alpha{margin-left:8px;position:relative;top:-3px}
+@media (max-width:370px){.course .alpha{display:none}}
+.alpha-link{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12.5px}
+.feedback-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px}
+.feedback-card b{display:block;font-size:15px}
+.feedback-card p{margin-top:2px}
+@media (max-width:440px){.feedback-card{grid-template-columns:auto minmax(0,1fr)}.feedback-card .btn{grid-column:1/-1}}
+a.btn{text-decoration:none}
+.code-box code.mail-code{font:600 15px/1.3 var(--f-mono);letter-spacing:0;overflow-wrap:anywhere}
 .chips{display:flex;align-items:center;gap:2px}
 .chip-btn{appearance:none;border:0;background:none;display:flex;align-items:center;gap:5px;padding:8px 8px;border-radius:12px;cursor:pointer;font:400 19px/1 var(--f-display);font-variant-numeric:tabular-nums}
 .chip-btn:hover{background:var(--surface-2)}
@@ -965,9 +977,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
 </template>
 
 <div class="app" id="app">
-  <nav class="side" id="side" aria-label="Fő menü"><div class="logo" id="sideLogo"><b>Kódkígyó</b></div></nav>
+  <nav class="side" id="side" aria-label="Fő menü"><div class="logo" id="sideLogo"><b>Kódkígyó<span class="alpha" title="Fejlesztés alatti változat">Alpha</span></b></div></nav>
   <main class="main">
-    <header class="topbar"><div class="topbar-in"><button class="course" id="courseBtn" type="button" aria-label="Kódkígyó, vissza a tanuláshoz"><b>Kódkígyó</b></button><div class="chips" id="chipsTop"></div></div></header>
+    <header class="topbar"><div class="topbar-in"><button class="course" id="courseBtn" type="button" aria-label="Kódkígyó (Alpha), vissza a tanuláshoz"><b>Kódkígyó</b><span class="alpha" aria-hidden="true">Alpha</span></button><div class="chips" id="chipsTop"></div></div></header>
     <div id="viewHost"></div>
   </main>
   <aside class="rail" id="rail" aria-label="Széria, liga és küldetések"></aside>
@@ -1044,20 +1056,23 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   const FREEZE_MAX = 2;
   const SHIELD_MAX = 1; // hétvégi pajzs: egyszerre egy lehet nálad
   const BOOST_MS = 15 * 60 * 1000;
+  // Gazdaság (2026-10-07): egy rendszeresen tanuló diák naponta kb. 70–90, egy alkalmi kb. 30–40 drágakövet szerez.
+  // Így a legolcsóbb kiegészítő már az első napon megvehető, egy új kígyó pár naponta-hetente, a legdrágább 2–5 hét alatt.
   const PRICE = { freeze: 100, refill: 80, boost: 60, repair: 150, legendary: 30, shield: 150 };
-  const START_GEMS = 50;
+  const START_GEMS = 100;
   const MONTH_GOAL = 20;
   const GOALS = [{ xp: 10, name: "Laza" }, { xp: 20, name: "Rendszeres" }, { xp: 30, name: "Komoly" }, { xp: 50, name: "Elszánt" }];
-  const MILESTONES = { 3: 5, 7: 10, 14: 15, 30: 25, 50: 40, 100: 50, 150: 60, 200: 75, 365: 125 };
-  const MONTH_GEMS = 30;
-  const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő a heti ligazáráskor
+  const MILESTONES = { 3: 10, 7: 20, 14: 30, 30: 50, 50: 80, 100: 100, 150: 120, 200: 150, 365: 250 };
+  const MONTH_GEMS = 60;
+  const LEAGUE_REWARDS = [40, 25, 15]; // az 1–3. helyért járó drágakő a heti ligazáráskor (a szerveren is ugyanennyi)
+  const ACH_GEMS = 10; // egy eredmény k. szintjéért 10·k drágakő jár
   // Ládák: koppintásonként esély van rá, hogy a láda egy szinttel jobb lesz.
   // c0–c3: a láda színei világostól sötétig, b0/b1: a pántok, glow: a fény és a háttér színe.
   const CHEST_TIERS = [
-    { name: "Fa láda", short: "Fa", c0: "#EDB677", c1: "#C98547", c2: "#8E5426", c3: "#4A2A10", b0: "#D5DCE4", b1: "#7E8A98", glow: "#FFC27A", gems: [4, 7] },
-    { name: "Ezüst láda", short: "Ezüst", c0: "#FFFFFF", c1: "#DDE6EF", c2: "#9EB0C3", c3: "#43546A", b0: "#86AEE0", b1: "#3D6699", glow: "#BFE2FF", gems: [8, 12] },
-    { name: "Arany láda", short: "Arany", c0: "#FFF3AE", c1: "#FFCF3F", c2: "#E39A0B", c3: "#7F4B00", b0: "#F06A6E", b1: "#A3283A", glow: "#FFD54A", gems: [15, 22] },
-    { name: "Smaragd láda", short: "Smaragd", c0: "#A5FFDA", c1: "#3BDE9C", c2: "#0F9E68", c3: "#044F35", b0: "#FFE680", b1: "#C98F0E", glow: "#5CFFC0", gems: [30, 40], boost: true },
+    { name: "Fa láda", short: "Fa", c0: "#EDB677", c1: "#C98547", c2: "#8E5426", c3: "#4A2A10", b0: "#D5DCE4", b1: "#7E8A98", glow: "#FFC27A", gems: [8, 12] },
+    { name: "Ezüst láda", short: "Ezüst", c0: "#FFFFFF", c1: "#DDE6EF", c2: "#9EB0C3", c3: "#43546A", b0: "#86AEE0", b1: "#3D6699", glow: "#BFE2FF", gems: [15, 22] },
+    { name: "Arany láda", short: "Arany", c0: "#FFF3AE", c1: "#FFCF3F", c2: "#E39A0B", c3: "#7F4B00", b0: "#F06A6E", b1: "#A3283A", glow: "#FFD54A", gems: [30, 40] },
+    { name: "Smaragd láda", short: "Smaragd", c0: "#A5FFDA", c1: "#3BDE9C", c2: "#0F9E68", c3: "#044F35", b0: "#FFE680", b1: "#C98F0E", glow: "#5CFFC0", gems: [60, 80], boost: true },
   ];
   const CHEST_UP = [0.3, 0.15, 0.06]; // fejlődési esély koppintásonként: fa→ezüst, ezüst→arany, arany→smaragd
   const CHEST_TAPS = 4;
@@ -1076,19 +1091,19 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // c: Tekla színei. theme: a felület színei ehhez a kígyóhoz. h a semleges színek (háttér, vonalak, szöveg)
   // árnyalata, light/dark a fő szín, a sötétebb változata és a halvány háttere világos és sötét módban.
   // A klasszikus Tekla a CSS alapértelmezett zöld témáját használja.
-  // Az árak egyre nőnek (napi kb. 30–40 drágakővel: kb. 1, 2, 4 és 6 hét gyűjtés); a boltban ebben a sorrendben jelennek meg.
+  // Az árak egyre nőnek (rendszeres tanulással kb. 2 nap, 5 nap, 1 és 2 hét gyűjtés); a boltban ebben a sorrendben jelennek meg.
   const SKINS = [
     { id: "classic", name: "Klasszikus Tekla", tone: "zöld", price: 0, c: null, theme: null },
-    { id: "ice", name: "Jégsikló", tone: "kék", price: 300, c: ["#56C1E9", "#2C8DB8", "#F1FBFF"],
+    { id: "ice", name: "Jégsikló", tone: "kék", price: 250, c: ["#56C1E9", "#2C8DB8", "#F1FBFF"],
       theme: { h: 199, light: ["#1E8FC4", "#156A94", "#DDF1FB"], dark: ["#3AA9E0", "#1F78A6", "#12303F"],
         units: [[215, 65, 48], [185, 70, 34], [205, 60, 33], [230, 50, 52], [175, 60, 32]] } },
-    { id: "coral", name: "Korallkígyó", tone: "piros", price: 600, c: ["#EF5F42", "#B53B23", "#FFE08A"],
+    { id: "coral", name: "Korallkígyó", tone: "piros", price: 500, c: ["#EF5F42", "#B53B23", "#FFE08A"],
       theme: { h: 10, light: ["#E0492C", "#B0331A", "#FCE3DC"], dark: ["#F0603F", "#B83C22", "#3D1D16"],
         units: [[25, 85, 45], [350, 65, 48], [5, 60, 36], [335, 55, 46], [18, 55, 38]] } },
-    { id: "night", name: "Éjféli piton", tone: "lila", price: 1000, c: ["#7C6CF0", "#5145C4", "#C9F1FF"],
+    { id: "night", name: "Éjféli piton", tone: "lila", price: 800, c: ["#7C6CF0", "#5145C4", "#C9F1FF"],
       theme: { h: 248, light: ["#6A57E0", "#4B3AB8", "#E6E2FC"], dark: ["#8676F2", "#5546C9", "#221D45"],
         units: [[222, 65, 48], [270, 55, 50], [235, 45, 38], [290, 50, 44], [205, 70, 40]] } },
-    { id: "gold", name: "Királykobra", tone: "arany", price: 1500, c: ["#E5B22E", "#B5860F", "#FFF1B8"],
+    { id: "gold", name: "Királykobra", tone: "arany", price: 1200, c: ["#E5B22E", "#B5860F", "#FFF1B8"],
       theme: { h: 43, light: ["#B47F06", "#8A6000", "#FBEFC9"], dark: ["#D99B16", "#A06F00", "#3A2E10"],
         units: [[28, 80, 42], [48, 85, 34], [15, 70, 38], [35, 55, 30], [22, 72, 37]] } },
   ];
@@ -1096,31 +1111,31 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   // Tekla kiegészítői. Helyenként (fej, arc, nyak) egyszerre egy viselhető, a kígyók mellé bármelyik felvehető,
   // és a többi játékos is látja őket. svg: rajz Tekla 120×120-as koordinátáiban; back: a fej mögé kerül (az áll alá).
   const ACCS = [
-    { id: "bowtie", name: "Csokornyakkendő", slot: "neck", price: 100, back: true, text: "Elegáns piros csokor az áll alatt.",
+    { id: "bowtie", name: "Csokornyakkendő", slot: "neck", price: 80, back: true, text: "Elegáns piros csokor az áll alatt.",
       svg: '<g transform="translate(66 63) rotate(-8)"><path d="M0 0-11.5-7Q-14 0-11.5 7Z" fill="#E5484D" stroke="#9E2A2F" stroke-width="1.6" stroke-linejoin="round"/><path d="M0 0 11.5-7Q14 0 11.5 7Z" fill="#E5484D" stroke="#9E2A2F" stroke-width="1.6" stroke-linejoin="round"/><circle cx="-6.5" cy="-1" r="1.2" fill="#fff" opacity=".85"/><circle cx="-8" cy="3" r="1.1" fill="#fff" opacity=".85"/><circle cx="7" cy="-1.5" r="1.2" fill="#fff" opacity=".85"/><circle cx="8" cy="3" r="1.1" fill="#fff" opacity=".85"/><rect x="-3.3" y="-3.8" width="6.6" height="7.6" rx="2.2" fill="#C2363C" stroke="#9E2A2F" stroke-width="1.4"/></g>' },
-    { id: "cap", name: "Baseballsapka", slot: "head", price: 150, text: "Python-kék sapka sárga csíkkal.",
+    { id: "cap", name: "Baseballsapka", slot: "head", price: 120, text: "Python-kék sapka sárga csíkkal.",
       svg: '<path d="M33 21Q33 3 58 3Q83 3 83 21Z" fill="#2F74C0" stroke="#1C4E87" stroke-width="2" stroke-linejoin="round"/><path d="M58 4V20M45 6.5Q47.5 13 46.5 20M71 6.5Q68.5 13 69.5 20" stroke="#1C4E87" stroke-width="1.3" fill="none" opacity=".55"/><path d="M34 18.5H82" stroke="#F5C518" stroke-width="3.2"/><path d="M66 19.5Q90 13 103 21Q89 27.5 66 23.5Z" fill="#245E9F" stroke="#1C4E87" stroke-width="2" stroke-linejoin="round"/><circle cx="58" cy="4" r="2.5" fill="#F5C518" stroke="#1C4E87" stroke-width="1.2"/>' },
-    { id: "glasses", name: "Kockaszemüveg", slot: "face", price: 200, text: "Az igazi programozók szemüvege.",
+    { id: "glasses", name: "Kockaszemüveg", slot: "face", price: 160, text: "Az igazi programozók szemüvege.",
       svg: '<g fill="rgba(190,225,255,.22)" stroke="#1D2A38" stroke-width="2.6"><rect x="35.6" y="21" width="21.6" height="19.5" rx="6"/><rect x="58.8" y="21" width="21.6" height="19.5" rx="6"/></g><path d="M57.2 28.5h1.6M35.6 27l-5-2M80.4 27l5-2" fill="none" stroke="#1D2A38" stroke-width="2.6" stroke-linecap="round"/><path d="M39.5 25.5l3.5-2.5M62.7 25.5l3.5-2.5" stroke="#fff" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round"/>' },
-    { id: "shades", name: "Napszemüveg", slot: "face", price: 250, text: "A legmenőbb kígyó a ligában.",
+    { id: "shades", name: "Napszemüveg", slot: "face", price: 200, text: "A legmenőbb kígyó a ligában.",
       svg: '<path d="M34.5 23.5H57.5V31Q57.5 41.5 46.5 41.5Q35 41.5 34.5 31Z" fill="#14202B" stroke="#070C11" stroke-width="2" stroke-linejoin="round"/><path d="M58.5 23.5H81.5V31Q81 41.5 69.5 41.5Q58.5 41.5 58.5 31Z" fill="#14202B" stroke="#070C11" stroke-width="2" stroke-linejoin="round"/><path d="M57.5 25.5h1M34.5 25l-4.5-1.5M81.5 25l4.5-1.5" stroke="#070C11" stroke-width="2.4" stroke-linecap="round"/><path d="M38.5 31l5-4.5M62.5 31l5-4.5" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>' },
-    { id: "headphones", name: "Fejhallgató", slot: "head", price: 350, text: "Zene szól kódolás közben.",
+    { id: "headphones", name: "Fejhallgató", slot: "head", price: 280, text: "Zene szól kódolás közben.",
       svg: '<path d="M30 33Q30 5 58 5Q86 5 86 33" fill="none" stroke="#262B33" stroke-width="5.5" stroke-linecap="round"/><path d="M33 30Q34 8 58 8" fill="none" stroke="#5A6474" stroke-width="1.6" stroke-linecap="round"/><rect x="23.5" y="25" width="12" height="20" rx="5" fill="#FF7A45" stroke="#B4471C" stroke-width="2"/><rect x="80.5" y="25" width="12" height="20" rx="5" fill="#FF7A45" stroke="#B4471C" stroke-width="2"/><path d="M27 29v12M89 29v12" stroke="#fff" stroke-opacity=".45" stroke-width="2" stroke-linecap="round"/>' },
-    { id: "wizard", name: "Varázslósüveg", slot: "head", price: 450, text: "Python-varázsló csillagokkal.",
+    { id: "wizard", name: "Varázslósüveg", slot: "head", price: 360, text: "Python-varázsló csillagokkal.",
       svg: '<path d="M37 16C46 11 58 4 74 1.6c2.2-.3 3.2 1 2.3 2.6L80 16Z" fill="#2F4FA8" stroke="#1B2F6B" stroke-width="2" stroke-linejoin="round"/><path d="M56 7.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="#F5C518"/><path d="M68 6l.7 1.5 1.6.2-1.2 1.1.3 1.6-1.4-.8-1.4.8.3-1.6-1.2-1.1 1.6-.2z" fill="#FFE27A"/><ellipse cx="58" cy="16.5" rx="31" ry="5" fill="#23408F" stroke="#1B2F6B" stroke-width="2"/>' },
-    { id: "crown", name: "Korona", slot: "head", price: 600, text: "Csak az igazi Királykobráknak.",
+    { id: "crown", name: "Korona", slot: "head", price: 480, text: "Csak az igazi Királykobráknak.",
       svg: '<path d="M40 18 38.5 6 48.5 11.5 58 3.5 67.5 11.5 77.5 6 76 18Z" fill="#F5C518" stroke="#B07C06" stroke-width="2" stroke-linejoin="round"/><rect x="39.5" y="14" width="37" height="5" rx="1.5" fill="#E3A90E" stroke="#B07C06" stroke-width="1.6"/><circle cx="58" cy="16.5" r="2.2" fill="#E5484D"/><circle cx="48" cy="16.5" r="1.8" fill="#2F74C0"/><circle cx="68" cy="16.5" r="1.8" fill="#12A07A"/><circle cx="38.5" cy="6" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/><circle cx="58" cy="3.5" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/><circle cx="77.5" cy="6" r="2" fill="#FFE27A" stroke="#B07C06" stroke-width="1.2"/>' },
   ];
   // Kódtémák: a leckék kódblokkjainak színei. vars: --code-* értékek (bg, ink, kw, str, num, fn, com, slot, glow).
   const CODE_THEMES = [
     { id: "base", name: "Kódkígyó", price: 0, text: "Az alap téma, a kígyód színeihez igazodik.", vars: null },
-    { id: "retro", name: "Retro terminál", price: 200, text: "Zöld betűk fekete képernyőn, mint a régi gépeken.",
+    { id: "retro", name: "Retro terminál", price: 150, text: "Zöld betűk fekete képernyőn, mint a régi gépeken.",
       vars: { bg: "#040B06", ink: "#5CF08A", kw: "#C6FFB3", str: "#8DFFB0", num: "#E2FFB8", fn: "#A6FFD0", com: "#3FA562", slot: "rgba(92,240,138,.16)", glow: "0 0 7px rgba(92,240,138,.45)" } },
-    { id: "python", name: "Python-kék", price: 300, text: "A Python saját színei: kék és sárga.",
+    { id: "python", name: "Python-kék", price: 220, text: "A Python saját színei: kék és sárga.",
       vars: { bg: "#13294B", ink: "#EAF2FF", kw: "#FFD43B", str: "#9ED5FF", num: "#FFB86B", fn: "#7FE3B5", com: "#8C9DBA", slot: "rgba(255,212,59,.16)" } },
-    { id: "neon", name: "Neon éjszaka", price: 300, text: "Rózsaszín, lila és citromsárga neonfények.",
+    { id: "neon", name: "Neon éjszaka", price: 220, text: "Rózsaszín, lila és citromsárga neonfények.",
       vars: { bg: "#1E1B2E", ink: "#F2EEFF", kw: "#FF79C6", str: "#F1FA8C", num: "#BD93F9", fn: "#8BE9FD", com: "#8F88B0", slot: "rgba(255,121,198,.16)" } },
-    { id: "candy", name: "Cukorka", price: 400, text: "Világos, pasztell kódblokkok.",
+    { id: "candy", name: "Cukorka", price: 300, text: "Világos, pasztell kódblokkok.",
       vars: { bg: "#FFF1F7", ink: "#4A2B3F", kw: "#C2255C", str: "#2B8A3E", num: "#D9480F", fn: "#5F3DC4", com: "#8A6079", slot: "rgba(194,37,92,.12)" } },
   ];
   const CODE_BASE = { bg: "#0F241E", ink: "#E4F3EC", kw: "#FF9E64", str: "#9BE38A", num: "#F7C948", fn: "#7DC8FF", com: "#7A978E", slot: "rgba(247,201,72,.16)" };
@@ -1601,7 +1616,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     ACH.forEach((a) => {
       const t = achTier(a), had = state.ach[a.id] || 0;
       if (t > had) {
-        for (let k = had + 1; k <= t; k++) addGems(5 * k);
+        for (let k = had + 1; k <= t; k++) addGems(ACH_GEMS * k);
         state.ach[a.id] = t;
         news.push({ a, tier: t });
       }
@@ -1726,7 +1741,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
   let STRICT = true;
   const MAX_ANSWERS = 400;
   const BASE_XP = { lesson: 10, exam: 25, practice: 10, mistakes: 10, legendary: 20, jump: 15 };
-  const BASE_GEMS = { lesson: 2, exam: 10, legendary: 5, jump: 5, practice: 1, mistakes: 1 };
+  const BASE_GEMS = { lesson: 5, exam: 20, legendary: 10, jump: 15, practice: 3, mistakes: 3 };
   const lessonOfKey = (key) => LESSONS[LESSON_POS[String(key).split(":")[0]]];
   const exCount = (ls) => ls.reduce((n, l) => n + l.ex.length, 0);
   const runId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -1876,8 +1891,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const gained = base ? addXp(base) : 0;
       const streak = extendStreak();
       let gems = BASE_GEMS[mode] || 0;
-      if (timed) gems = Math.min(5, Math.floor(run.ok / 4));
-      if (perfect) gems += 2;
+      if (timed) gems = Math.min(10, Math.floor(run.ok / 3));
+      if (perfect) gems += 3;
       addGems(gems);
       const firstTime = !!L && !isDone(run.i);
       if (mode === "lesson" || mode === "exam" || mode === "legendary") {
@@ -2382,7 +2397,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       `--blue:${t.dark[0]};--blue-deep:${t.dark[1]};--blue-soft:${t.dark[2]};` + units(true);
     return`:root{${light}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
   }
-  const FAVICON = document.querySelector('link[rel="icon"]').getAttribute("href");
+  // Tekla feje a böngészőfülön (ugyanaz, mint a favicon.svg), a kígyó színeit erre cseréljük.
+  const FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='28 6 60 60'%3E%3Cellipse cx='58' cy='37' rx='28' ry='24' fill='%231C8A5D'/%3E%3Cellipse cx='58' cy='36' rx='27' ry='22.5' fill='%232FB37E'/%3E%3Cellipse cx='58' cy='47' rx='17' ry='9.5' fill='%23F6D66B'/%3E%3Ccircle cx='46.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='48' cy='32' r='4.8' fill='%2311241E'/%3E%3Ccircle cx='69.5' cy='31' r='8.8' fill='%23fff'/%3E%3Ccircle cx='71' cy='32' r='4.8' fill='%2311241E'/%3E%3Cpath d='M52 46.5q6 5 12 0' fill='none' stroke='%2311241E' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E";
+  const ICON_LINKS = [...document.querySelectorAll('link[rel="icon"]')].map((l) => [l, l.getAttribute("href")]);
   function applySkin() {
     const sk = SKINS.find((s) => s.id === state.skin) || SKINS[0];
     const r = document.documentElement.style;
@@ -2395,10 +2412,10 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const [mLight, mDark] = document.querySelectorAll('meta[name="theme-color"]');
     mLight.setAttribute("content", sk.theme ? `hsl(${sk.theme.h} 18% 95.5%)` : "#F2F6F2");
     mDark.setAttribute("content", sk.theme ? `hsl(${sk.theme.h} 27% 6%)` : "#0C1512");
-    // A böngészőfül ikonján is Tekla aktuális színe látszik.
+    // A böngészőfül ikonján is Tekla aktuális színe látszik (a klasszikus kígyónál a favicon fájlok).
     const hex = (v) => "%23" + v.slice(1);
-    document.querySelector('link[rel="icon"]').setAttribute("href", sk.c
-      ? FAVICON.replace("%231C8A5D", hex(sk.c[1])).replace("%232FB37E", hex(sk.c[0])).replace("%23F6D66B", hex(sk.c[2])) : FAVICON);
+    const dyed = sk.c ? FAVICON.replace("%231C8A5D", hex(sk.c[1])).replace("%232FB37E", hex(sk.c[0])).replace("%23F6D66B", hex(sk.c[2])) : null;
+    ICON_LINKS.forEach(([l, href]) => l.setAttribute("href", dyed || href));
     applyCodeTheme();
   }
   // A kódtéma a gyökérelem stílusában írja felül a kódszíneket (ez erősebb a kinézet témájánál is).
@@ -3933,7 +3950,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         el("p", { class: "gate-lead" }, "Együtt tanulunk Pythont, kis lépésekben. Hogy szólíthatlak?"),
         form,
         el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"),
-        el("p", { class: "fine" }, "A folytatással elfogadod a ", legal("feltetelek", "felhasználási feltételeket"), ", és tudomásul veszed az ", legal("adatvedelem", "adatkezelési tájékoztatót"), ".")));
+        el("p", { class: "fine" }, "A folytatással elfogadod a ", legal("feltetelek", "felhasználási feltételeket"), ", és tudomásul veszed az ", legal("adatvedelem", "adatkezelési tájékoztatót"), "."),
+        el("p", { class: "fine" }, el("span", { class: "alpha" }, "Alpha"), " A Kódkígyó még fejlesztés alatt van, ezért előfordulhatnak benne hibák. Hibát vagy ötletet a ",
+          el("a", { href: "mailto:" + LEGAL.email }, LEGAL.email), " címre várunk.")));
     document.body.append(gateEl);
     appEl.inert = true;
     tabbar.inert = true;
@@ -3980,7 +3999,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const done = ACH.filter((a) => state.ach[a.id]).length;
     root.append(el("section", { class: "card" }, el("div", { class: "card-head" }, el("h3", null, "Eredmények"), el("span", { class: "pill" }, done + "/" + ACH.length)),
       el("div", { class: "ach-grid" }, ACH.map(achEl))));
-    root.append(legalLinks());
+    root.append(feedbackCard(), legalLinks());
     return root;
   }
   // label: mit írjon a visszajelzés (hosszú szövegnél nem magát a szöveget).
@@ -3993,6 +4012,40 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     const r = document.createRange(); r.selectNodeContents(node);
     const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
     toast("Jelöld ki és másold a kódot.");
+  }
+
+  // ===================== Alpha változat: visszajelzés =====================
+  // A Kódkígyó még fejlesztés alatt van (Alpha). Hibát és ötletet e-mailben várunk: a gombok előre kitöltött levelet nyitnak,
+  // a hibajelentésben a becenévvel, a barátkóddal és a böngésző adataival, hogy könnyebb legyen megtalálni a hibát.
+  function feedbackMail(kind) {
+    const bug = kind === "bug";
+    const ask = bug ? ["Mi történt?", "", "", "Mit csináltál közvetlenül előtte?", "", "", "(Ha tudsz, csatolj képernyőképet is.)"] : ["Mi az ötleted?", "", "", "Miért lenne jó?", ""];
+    const who = [NET.token ? "Becenév: " + myName() : null, NET.token ? "Barátkód: " + state.code : null, bug ? "Böngésző: " + navigator.userAgent : null].filter(Boolean);
+    const body = ask.concat(["", "—", "Kódkígyó Alpha"], who).join("\n");
+    return "mailto:" + LEGAL.email + "?subject=" + encodeURIComponent("Kódkígyó – " + (bug ? "hibajelentés" : "javaslat")) + "&body=" + encodeURIComponent(body);
+  }
+  function feedbackSheet() {
+    const mail = el("code", { class: "mail-code" }, LEGAL.email);
+    openSheet(null, tekla("happy"),
+      el("span", { class: "eyebrow" }, "Alpha változat"),
+      el("h3", { id: "sheetTitle" }, "Segíts jobbá tenni a Kódkígyót!"),
+      el("p", { class: "meta" }, "A Kódkígyó most Alpha állapotban van: még fejlesztjük, ezért előfordulhatnak benne hibák, és a játék részei (például a jutalmak, az árak vagy a tananyag) még változhatnak."),
+      el("p", { class: "meta" }, "Hibát találtál, vagy van egy ötleted? Írd meg nekünk! Minden levelet elolvasunk."),
+      el("div", { class: "row" },
+        el("a", { class: "btn", href: feedbackMail("bug") }, icon("bug"), "Hibajelentés"),
+        el("a", { class: "btn ghost", href: feedbackMail("idea") }, icon("spark"), "Javaslat")),
+      el("div", { class: "code-box" }, el("span", { class: "muted" }, "E-mail:"), mail,
+        el("button", { class: "btn ghost sm", type: "button", style: "margin-left:auto", onclick: () => copyText(LEGAL.email, mail) }, icon("copy"), "Másolás")),
+      el("p", { class: "note" }, "A gombok megnyitják a levelezőprogramodat egy előre kitöltött levéllel. Ha nem nyílik meg, írj közvetlenül a fenti címre."),
+      el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Bezárás"));
+    sheetIn.querySelector(".tekla").style.cssText = "width:90px;height:90px";
+  }
+  // A Profil alján.
+  function feedbackCard() {
+    return el("section", { class: "card feedback-card" }, el("span", { class: "alpha" }, "Alpha"),
+      el("div", null, el("b", null, "Hibát találtál, vagy van egy ötleted?"),
+        el("p", { class: "small muted" }, "A Kódkígyó még fejlesztés alatt van. Írd meg nekünk, minden visszajelzés segít!")),
+      el("button", { class: "btn sm", type: "button", onclick: feedbackSheet }, "Visszajelzés"));
   }
 
   // ===================== Legal view =====================
@@ -4026,7 +4079,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       el("nav", { class: "legal-nav", "aria-label": "Részek" }, LEGAL_SECTIONS.map(([id, label]) =>
         el("button", { class: "chip", type: "button", onclick: () => $("jogi-" + id).scrollIntoView({ block: "start", behavior: REDUCED ? "auto" : "smooth" }) }, label))),
       sec("impresszum", "Impresszum",
-        p("A Kódkígyó ingyenes, oktatási célú webes alkalmazás a Python programozási nyelv tanulásához."),
+        p("A Kódkígyó ingyenes, oktatási célú webes alkalmazás a Python programozási nyelv tanulásához. Jelenleg Alpha, vagyis fejlesztés alatti változat."),
         el("dl", null,
           kv("Üzemeltető", LEGAL.operator ? LEGAL.operator + (LEGAL.status ? " (" + LEGAL.status + ")" : "") : todo("üzemeltető neve")),
           LEGAL.address ? kv("Cím", LEGAL.address) : null,
@@ -4079,7 +4132,8 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         p("Ezek a bejegyzések a szolgáltatás működéséhez szükségesek, nem követnek, és nem kerülnek harmadik félhez, ezért nem kérünk hozzájárulást süti-ablakban. Törölheted őket a Beállítások › Haladás törlése gombbal vagy a böngésződ adatainak törlésével."),
         p("A fiók létrehozásakor megjelenő robotszűrő (Cloudflare Turnstile) a Cloudflare saját keretében fut. A működéséhez szükséges adatokat a Cloudflare kezeli, kizárólag biztonsági célból (lásd az Adatvédelem részt).")),
       sec("feltetelek", "Felhasználási feltételek",
-        ul("A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
+        ul("A Kódkígyó jelenleg Alpha, vagyis fejlesztés alatti változat. Előfordulhatnak benne hibák, és a játék részei (például a jutalmak, az árak és a tananyag) előzetes értesítés nélkül változhatnak. A hibákat és a javaslatokat a " + (LEGAL.email || "[e-mail cím]") + " címre várjuk.",
+          "A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",
           "A tananyagot gondosan állítottuk össze, és minden kódpéldát lefuttattunk Pythonnal, de hiba így is előfordulhat. Ha találsz egyet, jelezd itt: " + (LEGAL.email || "[e-mail cím]") + ".",
           "A kodkigyo.hu-n a haladásodat és a jutalmaidat a szerver számolja és menti, ezért a használatához internet kell. A közös online ligában valódi játékosokkal versenyzel. Ha a Kódkígyót fájlként nyitod meg, a ligában kitalált nevű gépi ellenfelek vannak, nem valódi emberek.",
@@ -4134,7 +4188,9 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
             el("button", { class: "btn blue sm", type: "button", onclick: () => go("profile") }, icon("userPlus"), "Fiók létrehozása"))
           : offlineNote("A barátlista online érhető el: a kodkigyo.hu-n fiókkal, vagy a claude.ai-on megnyitott Kódkígyóban.")));
     }
-    railEl.append(el("div", { class: "rail-foot" }, legalLinks(), el("p", null, "Kódkígyó · Python kis lépésekben")));
+    railEl.append(el("div", { class: "rail-foot" }, legalLinks(),
+      el("p", null, "Kódkígyó · Python kis lépésekben"),
+      el("button", { class: "link alpha-link", type: "button", onclick: feedbackSheet }, el("span", { class: "alpha" }, "Alpha"), "Hibajelentés és javaslatok")));
     animateBars(railEl);
   }
 
@@ -4329,6 +4385,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       row("Haladás törlése", NET.mode === "server" && NET.token ? "Minden XP, széria és jutalom elvész, a fiókodban és minden eszközödön." : "Minden XP, széria és jutalom elvész ezen az eszközön.", el("button", { class: "btn bad sm", type: "button", onclick: confirmReset }, "Törlés")),
       server ? row("Fiókom törlése", "A becenév, a statisztikák, a követések és az online mentés.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés"))
         : NET.mode === "claude" && online() ? row("Online adataim törlése", "A nyilvános játékprofilod és az online mentésed.", el("button", { class: "btn bad sm", type: "button", onclick: confirmOnlineDelete }, "Törlés")) : null,
+      row("Hibajelentés és javaslatok", "A Kódkígyó Alpha változat: minden visszajelzés segít.", el("button", { class: "btn ghost sm", type: "button", onclick: feedbackSheet }, "Írok")),
       row("Jogi tudnivalók", "Impresszum, adatvédelem, sütik, feltételek", el("button", { class: "btn ghost sm", type: "button", onclick: () => openLegal() }, "Megnyitás")),
       devMode() ? row("Tesztpanel", "Csak neked látszik: drágakövek, ládák, széria, értesítések.", el("button", { class: "btn ghost sm", type: "button", onclick: devPanel }, "Megnyitás")) : null,
       el("button", { class: "btn wide", type: "button", onclick: closeSheet }, "Kész"));
@@ -4538,7 +4595,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
     openSheet(null, el("h3", { id: "sheetTitle" }, (del ? "Törlöd" : "Nullázod") + " „" + p.nick + "” " + (del ? "fiókját?" : "haladását?")),
       el("p", { class: "meta" }, del
         ? "A játékos minden adata törlődik, és ez nem vonható vissza. Csak akkor használd, ha az átnevezés vagy a nullázás nem elég, például ha valaki újra és újra bántó nevet ad meg."
-        : "Csaláskor használd. A heti és az összes XP-je 0 lesz, a mentése a kezdőállapotra áll vissza: 50 drágakő, a vásárlásai és a leckéi elvesznek. A fiók, a becenév és a barátai megmaradnak, tisztességesen újrakezdheti. Nem vonható vissza."),
+        : "Csaláskor használd. A heti és az összes XP-je 0 lesz, a mentése a kezdőállapotra áll vissza: " + START_GEMS + " drágakő, a vásárlásai és a leckéi elvesznek. A fiók, a becenév és a barátai megmaradnak, tisztességesen újrakezdheti. Nem vonható vissza."),
       el("div", { class: "row" }, el("button", { class: "btn ghost", type: "button", onclick: () => modPanel(query) }, "Mégsem"), btn));
   }
 
@@ -5285,7 +5342,7 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
         const row = el("div", { class: "ach-unlock", style: "animation-delay:" + (0.2 + i * 0.15) + "s" }, medal,
           el("div", null, el("b", { style: "font-family:var(--f-display);font-weight:400;font-size:20px" }, n.a.name + " · " + n.tier + ". szint"),
             el("p", { class: "small muted" }, n.a.desc(n.a.tiers[n.tier - 1])),
-            el("span", { class: "small", style: "color:var(--gem);font-weight:700" }, "+" + 10 * n.tier + " drágakő")));
+            el("span", { class: "small", style: "color:var(--gem);font-weight:700" }, "+" + ACH_GEMS * n.tier + " drágakő")));
         list.append(row);
         later(() => burstAt(medal, { n: 12, colors: [cssVar("--sun"), cssVar("--gem"), "#FFFFFF"] }), 450 + i * 150);
       });

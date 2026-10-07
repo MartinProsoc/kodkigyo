@@ -14,7 +14,7 @@ const WEEKLY_CAP = 5000;
 const DAY_XP = 750;         // a heti ligában a hét minden napjára legfeljebb ennyi XP jut (biztonsági korlát)
 const GEMS_SUSPICIOUS = 100000; // ennyi drágakő tisztességesen nem gyűlhet össze
 const GROUP_SIZE = 30;
-const LEAGUE_REWARDS = [20, 10, 5]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
+const LEAGUE_REWARDS = [40, 25, 15]; // az 1–3. helyért járó drágakő (ugyanennyi az appban)
 const REPORT_REASONS = ["nick", "other"];
 // Durva szavak a becenevekhez (ékezet nélkül, kisbetűvel; a számokat betűvé alakítva is ellenőrizzük).
 const BAD_WORDS = ["fasz", "geci", "kurva", "picsa", "pina", "buzi", "ribanc", "kocsog", "bazd", "baszd", "fuck", "shit", "bitch", "cunt", "nigg", "hitler", "porn"];
