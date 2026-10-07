@@ -4483,8 +4483,33 @@ code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);paddin
       const r = await api("POST", "admin/player", { id: p.id, action: "newcode" });
       const code = String(r.token || "").replace(".", "").match(/.{1,4}/g).join("-");
       const codeEl = el("code", { class: "login-code" }, code);
-      const letter = "Szia!\n\nAz új Kódkígyó-belépőkódod: " + code + "\n\nBelépés: nyisd meg a " + location.origin + " oldalt, és válaszd a „Van már fiókom: belépés kóddal” lehetőséget. " +
-        "A régi kódod már nem működik. Vigyázz az új kódra, és senkinek ne add meg: aki ismeri, be tud lépni a fiókodba!\n\nÜdv:\nKódkígyó";
+      // Válaszlevél a kérőnek (tegező, mert az app is így szól a diákokhoz).
+      const letter = [
+        "Kedves " + p.nick + "!",
+        "",
+        "Köszönjük a leveledet. Ellenőriztük az általad megadott adatokat, és a „" + p.nick + "” becenevű Kódkígyó-fiókodhoz új belépőkódot állítottunk ki.",
+        "",
+        "Az új belépőkódod:",
+        code,
+        "",
+        "Így tudsz belépni:",
+        "1. Nyisd meg a " + location.origin + " oldalt.",
+        "2. Az üdvözlő képernyőn válaszd a „Van már fiókom: belépés kóddal” lehetőséget.",
+        "3. Írd be a fenti kódot (a kötőjeleket elhagyhatod), majd koppints a Belépés gombra.",
+        "",
+        "A korábbi belépőkódod biztonsági okokból megszűnt. Ha valamelyik eszközödön még be voltál jelentkezve, ott is az új kóddal kell újra belépned. " +
+          "A haladásod (XP, széria, drágakövek, vásárlások és teljesített leckék) változatlanul megmaradt.",
+        "",
+        "Kérjük, az új kódot most mentsd el biztonságos helyre: írd fel, töltsd le a Profil › Beállítások › Belépőkód menüpontban, vagy mentsd el a böngésződ jelszókezelőjébe. " +
+          "A kódot senkinek ne add meg, mert aki ismeri, be tud lépni a fiókodba. A belépőkódodat mi soha nem kérjük el tőled.",
+        "",
+        "Ha kérdésed van, válaszolj erre a levélre, vagy írj a " + LEGAL.email + " címre.",
+        "",
+        "Üdvözlettel:",
+        LEGAL.operator || "A Kódkígyó csapata",
+        LEGAL.operator ? "a Kódkígyó üzemeltetője" : null,
+        location.origin,
+      ].filter((x) => x != null).join("\n");
       sfx("coin");
       openSheet(null, el("span", { class: "eyebrow", style: "color:var(--ink-soft)" }, "Csak neked látszik"),
         el("h3", { id: "sheetTitle" }, "„" + p.nick + "” új belépőkódja"),
