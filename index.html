@@ -409,6 +409,8 @@ a.btn{text-decoration:none}
 .gate .fine{font-size:13px;color:var(--ink-soft);line-height:1.5}
 .gate .fine .link{font-size:13px;padding:0;min-height:0}
 .gate-back{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.age-chk{display:flex;align-items:flex-start;gap:8px;text-align:left;font-size:13px;color:var(--ink-soft);line-height:1.4;cursor:pointer}
+.age-chk input{margin:2px 0 0;width:17px;height:17px;flex:none;accent-color:var(--brand)}
 .hcheck{display:flex;justify-content:center;max-width:100%;overflow:hidden}
 .hcheck.ask{min-height:65px}
 .swatches{display:flex;gap:6px;margin-top:8px}
@@ -2483,6 +2485,12 @@ a.btn{text-decoration:none}
     });
     return tsLoading;
   }
+  function ageCheck() {
+    const box = el("input", { type: "checkbox", id: "ageOk-" + Math.random().toString(36).slice(2) });
+    const label = el("label", { class: "age-chk", for: box.id }, box,
+      el("span", null, "Megerősítem, hogy elmúltam 13 éves, vagy a szülőm/gondviselőm beleegyezésével regisztrálok."));
+    return { el: label, check() { return box.checked; }, focus() { box.focus(); } };
+  }
   function humanCheck() {
     const box = el("div", { class: "hcheck" });
     let id = null, token = "", failed = "", mounting = false, waiters = [];
@@ -3550,7 +3558,9 @@ a.btn{text-decoration:none}
     const nick = el("input", { class: "search", id: "accNick", maxlength: "20", placeholder: "Becenév, pl. Kódmester", autocomplete: "off", value: prefs.nick || "", "aria-label": "Becenév" });
     const msg = el("p", { class: "note", "aria-live": "polite" });
     const check = humanCheck();
+    const age = ageCheck();
     const go1 = (e) => busy(e.currentTarget, msg, async () => {
+      if (!age.check()) { age.focus(); throw new Error("Előbb erősítsd meg, hogy elmúltál 13 éves, vagy szülői beleegyezéssel regisztrálsz!"); }
       try { await createAccount(nick.value, await check.get((t) => { msg.textContent = t; })); }
       catch (err) { check.reset(); throw err; }
       check.remove(); sfx("coin"); render(); toast("Kész a fiókod! Mostantól az online ligában versenyzel.");
@@ -3560,7 +3570,7 @@ a.btn{text-decoration:none}
       el("div", { class: "card-head" }, el("h3", null, "Online liga és barátok")),
       el("p", { class: "muted small" }, "Hozz létre fiókot: bekerülsz a közös online ligába, követheted a barátaidat, csatlakozhatsz az osztályodhoz, és a haladásod minden eszközödön megmarad. Csak becenevet kérünk, e-mail címet nem. Ne a teljes neved add meg!"),
       el("div", { class: "row" }, nick, el("button", { class: "btn blue", type: "button", onclick: go1 }, "Fiók létrehozása")),
-      check.box, msg,
+      age.el, check.box, msg,
       el("button", { class: "link", type: "button", onclick: loginSheet }, "Van már fiókom: belépés kóddal"));
   }
   function loginSheet() {
@@ -3721,10 +3731,12 @@ a.btn{text-decoration:none}
     const msg = el("p", { class: "note", "aria-live": "polite" });
     const goBtn = el("button", { class: "btn wide gate-go", type: "submit" }, "Kezdjük!");
     const check = (gateCheck = humanCheck());
-    const form = el("form", { novalidate: true }, nick, el("p", { class: "fine" }, "Becenevet adj meg, ne a teljes neved. Ezt látják a többiek a ligában."), check.box, msg, goBtn);
+    const age = ageCheck();
+    const form = el("form", { novalidate: true }, nick, el("p", { class: "fine" }, "Becenevet adj meg, ne a teljes neved. Ezt látják a többiek a ligában."), age.el, check.box, msg, goBtn);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       if (NET.mode !== "server" || goBtn.dataset.busy) return;
+      if (!age.check()) { msg.textContent = "Előbb erősítsd meg, hogy elmúltál 13 éves, vagy szülői beleegyezéssel regisztrálsz!"; age.focus(); return; }
       goBtn.dataset.busy = "1";
       busy(goBtn, msg, async () => {
         const captcha = await check.get((t) => { msg.textContent = t; });
@@ -3927,6 +3939,7 @@ a.btn{text-decoration:none}
       sec("feltetelek", "Felhasználási feltételek",
         ul("A Kódkígyó jelenleg Alpha, vagyis fejlesztés alatti változat. Előfordulhatnak benne hibák, és a játék részei (például a jutalmak, az árak és a tananyag) előzetes értesítés nélkül változhatnak. A hibákat és a javaslatokat a " + (LEGAL.email || "[e-mail cím]") + " címre várjuk.",
           "A Kódkígyó ingyenes, oktatási célú alkalmazás. A használatához egy becenévvel létrehozott fiók kell (e-mail cím, jelszó vagy valódi név nem), és nincs benne valódi pénzért vásárolható tartalom.",
+          "Fiókot 13 éven aluli csak a szülője vagy gondviselője beleegyezésével hozhat létre. A regisztrációnál ezt meg kell erősíteni.",
           "A drágakövek, széria-befagyasztók, erősítők és Tekla-kinézetek virtuális játékelemek. Nincs pénzbeli értékük, nem válthatók be, nem ruházhatók át, és a játék fejlesztése során módosulhatnak.",
           "A tananyagot gondosan állítottuk össze, és minden kódpéldát lefuttattunk Pythonnal, de hiba így is előfordulhat. Ha találsz egyet, jelezd itt: " + (LEGAL.email || "[e-mail cím]") + ".",
           "A kodkigyo.hu-n a haladásodat és a jutalmaidat a szerver számolja és menti, ezért a használatához internet kell. A közös online ligában valódi játékosokkal versenyzel. Ha a Kódkígyót fájlként nyitod meg, a ligában kitalált nevű gépi ellenfelek vannak, nem valódi emberek.",
@@ -3940,7 +3953,10 @@ a.btn{text-decoration:none}
         p("A „Python” a Python Software Foundation bejegyzett védjegye. A Kódkígyó nem áll kapcsolatban a Python Software Foundationnel, és nem az ő támogatásukkal készült."),
         p("A hangeffekteket a böngésző állítja elő, az ikonokat és Tekla figuráját saját magunk rajzoltuk."),
         p("Betűtípusok, a ", ext("https://openfontlicense.org", "SIL Open Font License 1.1"), " alapján:"),
-        ul(...credits.map(([n, c]) => n + " · " + c))),
+        ul(...credits.map(([n, c]) => n + " · " + c)),
+        el("h3", null, "Szerzői jogi panasz"),
+        p("A Kódkígyó nem tesz lehetővé fájl- vagy képfeltöltést, a felhasználók csak becenevet és osztálynevet adhatnak meg. Ha mégis úgy gondolod, hogy a Kódkígyón található valami megsérti a szerzői jogaidat, írj a ", contact(),
+          " címre. Add meg, mi a jogsértő tartalom, hol található, mi a te jogod rá, az elérhetőségedet, és egy nyilatkozatot, hogy jóhiszeműen jársz el. A bejelentést kivizsgáljuk, és indokolt esetben eltávolítjuk a tartalmat.")),
       el("button", { class: "btn ghost", type: "button", onclick: () => go("learn") }, "Vissza a tanuláshoz"));
   }
 
